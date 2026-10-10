@@ -3,6 +3,7 @@ package com.github.aaronbittel;
 import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.logging.Logger;
@@ -60,30 +61,39 @@ public class Main {
         try (var server = new ServerSocket(port, BACKLOG, address)) {
             server.setReuseAddress(true);
             while (true) {
-                try (var client = server.accept()) {
-                    log.info("accepted client: " + client.getLocalSocketAddress());
-                    var in = new BufferedInputStream(client.getInputStream());
-                    var requestLine = parseRequestLine(readHTTPLine(in));
-                    log.info("requestLine:" + requestLine);
-
-                    var writer = new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
-
-                    var resolvedTarget = resolveRequestPath(root, requestLine.requestTarget());
-                    log.info("resolvedTarget: " + resolvedTarget);
-
-                    if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
-                        writer.write("HTTP/1.1 404 NOT FOUND\r\n\r\n");
-                        writer.flush();
-                        continue;
+                var client = server.accept();
+                Thread.ofVirtual().start(() -> {
+                    try (client) {
+                        handleConnection(client, root);
+                    } catch (IOException e) {
+                        log.warning(e.getMessage());
                     }
-
-                    var content = Files.readString(resolvedTarget);
-
-                    writer.write("HTTP/1.1 200 OK\r\n\r\n" + content);
-                    writer.flush();
-                }
+                });
             }
         }
+    }
+
+    static void handleConnection(Socket client, Path root) throws IOException {
+        log.info("accepted client: " + client.getLocalSocketAddress());
+        var in = new BufferedInputStream(client.getInputStream());
+        var requestLine = parseRequestLine(readHTTPLine(in));
+        log.info("requestLine:" + requestLine);
+
+        var writer = new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
+
+        var resolvedTarget = resolveRequestPath(root, requestLine.requestTarget());
+        log.info("resolvedTarget: " + resolvedTarget);
+
+        if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
+            writer.write("HTTP/1.1 404 NOT FOUND\r\n\r\n");
+            writer.flush();
+            return;
+        }
+
+        var content = Files.readString(resolvedTarget);
+
+        writer.write("HTTP/1.1 200 OK\r\n\r\n" + content);
+        writer.flush();
     }
 
     static String readHTTPLine(InputStream in) throws IOException {
