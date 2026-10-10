@@ -23,14 +23,41 @@ enum HTTPVersion {
 
 public class Main {
     private static final Logger log = Logger.getLogger(Main.class.getName());
-    private static final int PORT = 80;
-    private static final int BACKLOG = 5;
     private static final int MAXIMUM_HTTP_LINE_LENGTH = 8192;
-    private static final Path basePath = Path.of("./www").toAbsolutePath().normalize();
+    private static final int BACKLOG = 5;
+
+    private static final String DEFAULT_ADDRESS = "127.0.0.1";
+    private static final int DEFAULT_PORT = 80;
+    private static final Path DEFAULT_BASE_PATH = Path.of("./www").toAbsolutePath().normalize();
 
     static void main() throws IOException {
-        log.info("starting server on port: " + PORT);
-        try (var server = new ServerSocket(PORT, BACKLOG, InetAddress.getLoopbackAddress())) {
+        Path root;
+        InetAddress address;
+        int port;
+
+        try {
+            root = Path.of(readEnvVar("CC_DIRECTORY", DEFAULT_BASE_PATH.toString())).toAbsolutePath().normalize();
+
+            if (!Files.isDirectory(root)) {
+                throw new IllegalArgumentException("CC_DIRECTORY is not an existing directory: " + root);
+            }
+
+            address = InetAddress.ofLiteral(readEnvVar("CC_ADDRESS", DEFAULT_ADDRESS));
+
+            port = Integer.parseInt(readEnvVar("CC_PORT", String.valueOf(DEFAULT_PORT)));
+            if (port < 1 || port > 65535) {
+                throw new IllegalArgumentException("CC_PORT must be between 1 and 65535: " + port);
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println("Configuration error: " + e.getMessage());
+            return;
+        }
+
+        log.info(() -> String.format(
+                "Serving HTTP on %s port %d (http://%s:%d/) from directory %s",
+                address.getHostAddress(), port, address.getHostAddress(), port, root));
+
+        try (var server = new ServerSocket(port, BACKLOG, address)) {
             server.setReuseAddress(true);
             while (true) {
                 try (var client = server.accept()) {
@@ -41,7 +68,7 @@ public class Main {
 
                     var writer = new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
 
-                    var resolvedTarget = resolveRequestPath(basePath, requestLine.requestTarget());
+                    var resolvedTarget = resolveRequestPath(root, requestLine.requestTarget());
                     log.info("resolvedTarget: " + resolvedTarget);
 
                     if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
@@ -135,5 +162,10 @@ public class Main {
         }
 
         return resolvedTarget;
+    }
+
+    static String readEnvVar(String name, String fallback) {
+        var value = System.getenv(name);
+        return value == null || value.isBlank() ? fallback : value;
     }
 }
