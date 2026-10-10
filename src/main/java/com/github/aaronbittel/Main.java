@@ -23,6 +23,7 @@ public class Main {
     private static final Logger log = Logger.getLogger(Main.class.getName());
     private static final int PORT = 80;
     private static final int BACKLOG = 5;
+    private static final int MAXIMUM_HTTP_LINE_LENGTH = 8192;
 
     static void main() throws IOException {
         log.info("starting server on port: " + PORT);
@@ -31,8 +32,8 @@ public class Main {
             while (true) {
                 try (var client = server.accept()) {
                     log.info("accepted client: " + client.getLocalSocketAddress());
-                    var reader = new BufferedReader(new InputStreamReader(client.getInputStream()));
-                    var requestLine = parseRequestLine(reader.readLine());
+                    var in = new BufferedInputStream(client.getInputStream());
+                    var requestLine = parseRequestLine(readHTTPLine(in));
                     log.info("client send: " + requestLine);
 
                     var writer = new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
@@ -41,6 +42,32 @@ public class Main {
                 }
             }
         }
+    }
+
+    static String readHTTPLine(InputStream in) throws IOException {
+        var sb = new StringBuilder();
+
+        int c;
+        while ((c = in.read()) != -1) {
+            switch (c) {
+                case '\r' -> {
+                    if (in.read() == '\n') {
+                        return sb.toString();
+                    }
+                    throw new IOException("Invalid HTTP line ending");
+                }
+                case '\n' ->
+                        throw new IOException("Invalid HTTP line ending");
+                default -> {
+                    if (sb.length() >= MAXIMUM_HTTP_LINE_LENGTH) {
+                        throw new IOException("HTTP line exceeds maximum length");
+                    }
+                    sb.append((char) c);
+                }
+            }
+        }
+
+        throw new IOException("Unexpected end of stream before HTTP line terminator");
     }
 
     static RequestLine parseRequestLine(String line) {
