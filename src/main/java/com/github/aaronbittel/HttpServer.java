@@ -1,9 +1,8 @@
 package com.github.aaronbittel;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedWriter;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -47,27 +46,35 @@ public class HttpServer {
     private static void handleConnection(Socket client, Path root) throws IOException {
         log.info("accepted client: " + client.getLocalSocketAddress());
 
-        var in = new BufferedInputStream(client.getInputStream());
+        var parser = new HttpRequestParser(new BufferedInputStream(client.getInputStream()));
+        var responseWriter = new HttpResponseWriter(new BufferedOutputStream(client.getOutputStream()));
 
-        var parser = new HttpRequestParser(in);
-        var request = parser.parseRequest();
+        HttpRequest request;
+        HttpResponse response;
+
+        try {
+            request = parser.parseRequest();
+        } catch (IllegalArgumentException e) {
+            log.warning("Invalid HTTP request: " + e.getMessage());
+
+            response = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.BAD_REQUEST, HttpResponse.EMPTY_BODY);
+            responseWriter.write(response);
+            return;
+        }
+
         log.info("request:" + request);
-
-        var writer = new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
 
         var resolvedTarget = resolveRequestPath(root, request.requestLine().requestTarget());
         log.info("resolvedTarget: " + resolvedTarget);
 
         if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
-            writer.write("HTTP/1.1 404 Not Found\r\n\r\n");
-            writer.flush();
-            return;
+            response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND, HttpResponse.EMPTY_BODY);
+        } else {
+            var content = Files.readAllBytes(resolvedTarget);
+            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, content);
         }
 
-        var content = Files.readString(resolvedTarget);
-
-        writer.write("HTTP/1.1 200 OK\r\n\r\n" + content);
-        writer.flush();
+        responseWriter.write(response);
     }
 
     static Path resolveRequestPath(Path basePath, String requestTarget) {
