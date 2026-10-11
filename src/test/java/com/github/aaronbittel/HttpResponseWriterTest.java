@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import static com.github.aaronbittel.HttpRequestParserTest.buildHeaders;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class HttpResponseWriterTest {
@@ -22,14 +23,16 @@ class HttpResponseWriterTest {
     @Test
     void empty_body_write() throws IOException {
         var expected = "HTTP/1.1 200 OK\r\n\r\n";
-        writer.write(new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, HttpResponse.EMPTY_BODY));
+        writer.write(new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK));
         assertThat(out.toString()).isEqualTo(expected);
     }
 
     @Test
     void write_with_body() throws IOException {
-        var expected = "HTTP/1.1 200 OK\r\n\r\nHello World";
-        writer.write(new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, "Hello World".getBytes(StandardCharsets.US_ASCII)));
+        var content = "Hello World";
+        var expected = "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s".formatted(content.getBytes().length, content);
+        var headers = buildHeaders("Content-Length", String.valueOf(content.length()));
+        writer.write(new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, content.getBytes(StandardCharsets.US_ASCII)));
         assertThat(out.toString()).isEqualTo(expected);
     }
 }

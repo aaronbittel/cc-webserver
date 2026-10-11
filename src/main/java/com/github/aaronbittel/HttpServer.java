@@ -57,7 +57,7 @@ public class HttpServer {
         } catch (IllegalArgumentException e) {
             log.warning("Invalid HTTP request: " + e.getMessage());
 
-            response = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.BAD_REQUEST, HttpResponse.EMPTY_BODY);
+            response = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.BAD_REQUEST);
             responseWriter.write(response);
             return;
         }
@@ -68,10 +68,13 @@ public class HttpServer {
         log.info("resolvedTarget: " + resolvedTarget);
 
         if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
-            response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND, HttpResponse.EMPTY_BODY);
+            response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND);
         } else {
             var content = Files.readAllBytes(resolvedTarget);
-            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, content);
+            var contentLength = content.length;
+            var headers = new HttpHeaders();
+            headers.add("Content-Length", String.valueOf(contentLength));
+            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, content);
         }
 
         responseWriter.write(response);

@@ -13,13 +13,41 @@ public class HttpResponseWriter {
     }
 
     public void write(HttpResponse response) throws IOException {
-        var responseLine = "%s %d %s\r\n\r\n".formatted(
-                response.version().protocolString(),
-                response.status().code(),
-                response.status().text());
+        writeStatusLine(response.version(), response.status());
 
-        out.write(responseLine.getBytes(StandardCharsets.US_ASCII));
+        for (var header : response.headers()) {
+            writeHeaderLine(header.getKey(), header.getValue());
+        }
+
+        writeCrlf();
         out.write(response.body());
+
         out.flush();
+    }
+
+    private void writeStatusLine(HttpVersion version, HttpStatus status) throws IOException {
+        writeAscii(version.protocolString());
+        out.write(' ');
+        writeAscii(String.valueOf(status.code()));
+        out.write(' ');
+        writeAscii(status.text());
+        writeCrlf();
+    }
+
+    private void writeHeaderLine(String key, String value) throws IOException {
+        writeAscii(key);
+        out.write(':');
+        out.write(' ');
+        writeAscii(value);
+        writeCrlf();
+    }
+
+    private void writeAscii(String value) throws IOException {
+        out.write(value.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private void writeCrlf() throws IOException {
+        out.write('\r');
+        out.write('\n');
     }
 }
