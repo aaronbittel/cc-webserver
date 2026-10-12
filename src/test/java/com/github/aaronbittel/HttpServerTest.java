@@ -31,7 +31,7 @@ class HttpServerTest {
 
     @Test
     void reject_path_not_starting_with_slash() {
-        assertThatIllegalArgumentException().isThrownBy(() -> HttpServer.resolveRequestPath(BASE_PATH, "somepath"));
+        assertThatIllegalArgumentException().isThrownBy(() -> HttpServer.resolveRequestPath(BASE_PATH, "some-path"));
     }
 
     @Test
@@ -63,7 +63,7 @@ class HttpServerTest {
         }
 
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> HttpServer.resolveRequestPath(root, "/" + symPath.toString()))
+                .isThrownBy(() -> HttpServer.resolveRequestPath(root, "/" + symPath))
                 .withMessage("Path traversal detected");
     }
 

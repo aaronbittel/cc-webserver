@@ -126,7 +126,11 @@ public class HttpServer {
         if (relativeTarget.isEmpty()) {
             relativeTarget = "index.html";
         }
-        var resolvedTarget = rootPath.resolve(relativeTarget).normalize().toRealPath();
+        var resolvedTarget = rootPath.resolve(relativeTarget).normalize();
+
+        if (Files.isSymbolicLink(resolvedTarget)) {
+            resolvedTarget = Files.readSymbolicLink(resolvedTarget);
+        }
 
         if (!resolvedTarget.startsWith(rootPath)) {
             throw new IllegalArgumentException("Path traversal detected");
