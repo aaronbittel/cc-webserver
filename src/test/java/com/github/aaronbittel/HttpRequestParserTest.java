@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import static com.github.aaronbittel.TestUtilis.buildHeaders;
 import static org.assertj.core.api.Assertions.*;
 
 class HttpRequestParserTest {
@@ -61,19 +62,5 @@ class HttpRequestParserTest {
     void rejects_illegal_header_line(String description, String headerLine) {
         var in = new ByteArrayInputStream(headerLine.getBytes(StandardCharsets.US_ASCII));
         assertThatIllegalArgumentException().isThrownBy(() -> HttpRequestParser.parseHeaders(in));
-    }
-
-    public static HttpHeaders buildHeaders(String... pairs) {
-        if (pairs.length % 2 != 0) {
-            throw new IllegalArgumentException("Expected key-value pairs");
-        }
-
-        var headers = new HttpHeaders();
-
-        for (int i = 0; i < pairs.length; i += 2) {
-            headers.add(pairs[i], pairs[i + 1]);
-        }
-
-        return headers;
     }
 }

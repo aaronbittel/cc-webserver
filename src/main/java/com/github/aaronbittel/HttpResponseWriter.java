@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
-public class HttpResponseWriter {
+public class HttpResponseWriter implements ResponseWriter {
 
     private final OutputStream out;
 
@@ -12,6 +12,7 @@ public class HttpResponseWriter {
         this.out = out;
     }
 
+    @Override
     public void write(HttpResponse response) throws IOException {
         writeStatusLine(response.version(), response.status());
 

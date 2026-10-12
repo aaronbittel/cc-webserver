@@ -41,4 +41,9 @@ public class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     Map<String, String> headers() {
         return Collections.unmodifiableMap(new TreeMap<>(headers));
     }
+
+    @Override
+    public String toString() {
+        return headers.toString();
+    }
 }

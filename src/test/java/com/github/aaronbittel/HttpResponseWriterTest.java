@@ -7,7 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import static com.github.aaronbittel.HttpRequestParserTest.buildHeaders;
+import static com.github.aaronbittel.TestUtilis.buildHeaders;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class HttpResponseWriterTest {

@@ -34,7 +34,7 @@ public class HttpServer {
                 var client = server.accept();
                 Thread.ofVirtual().start(() -> {
                     try (client) {
-                        handleConnection(client, config.root());
+                        handleConnection(client);
                     } catch (IOException e) {
                         log.warning(e.getMessage());
                     }
@@ -43,11 +43,11 @@ public class HttpServer {
         }
     }
 
-    private static void handleConnection(Socket client, Path root) throws IOException {
+    private void handleConnection(Socket client) throws IOException {
         log.info("accepted client: " + client.getLocalSocketAddress());
 
         var parser = new HttpRequestParser(new BufferedInputStream(client.getInputStream()));
-        var responseWriter = new HttpResponseWriter(new BufferedOutputStream(client.getOutputStream()));
+        var writer = new HttpResponseWriter(new BufferedOutputStream(client.getOutputStream()));
 
         HttpRequest request;
         HttpResponse response;
@@ -58,15 +58,46 @@ public class HttpServer {
             log.warning("Invalid HTTP request: " + e.getMessage());
 
             response = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.BAD_REQUEST);
-            responseWriter.write(response);
+            writer.write(response);
             return;
         }
 
         log.info("request:" + request);
+        handleRequest(writer, request);
+    }
 
-        var resolvedTarget = resolveRequestPath(root, request.requestLine().requestTarget());
+    void handleRequest(ResponseWriter writer, HttpRequest request) throws IOException {
+        switch (request.requestLine().method()) {
+            case GET -> handleGet(writer, request);
+            case HEAD -> handleHead(writer, request);
+            default -> handleUnsupportedMethod(writer, request);
+        }
+    }
+
+    void handleGet(ResponseWriter writer, HttpRequest request) throws IOException {
+        var resolvedTarget = resolveRequestPath(config.root(), request.requestLine().requestTarget());
         log.info("resolvedTarget: " + resolvedTarget);
 
+        HttpResponse response;
+        if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
+            response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND);
+        } else {
+            var content = Files.readAllBytes(resolvedTarget);
+            var contentLength = content.length;
+            var headers = new HttpHeaders();
+            headers.add("Content-Type", "text/html");
+            headers.add("Content-Length", String.valueOf(contentLength));
+            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, content);
+        }
+
+        writer.write(response);
+    }
+
+    void handleHead(ResponseWriter writer, HttpRequest request) throws IOException {
+        var resolvedTarget = resolveRequestPath(config.root(), request.requestLine().requestTarget());
+        log.info("resolvedTarget: " + resolvedTarget);
+
+        HttpResponse response;
         if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
             response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND);
         } else {
@@ -74,10 +105,16 @@ public class HttpServer {
             var contentLength = content.length;
             var headers = new HttpHeaders();
             headers.add("Content-Length", String.valueOf(contentLength));
-            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, content);
+            headers.add("Content-Type", "text/html");
+            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
         }
 
-        responseWriter.write(response);
+        writer.write(response);
+    }
+
+    void handleUnsupportedMethod(ResponseWriter writer, HttpRequest request) throws IOException {
+        var response = new HttpResponse(request.requestLine().version(), HttpStatus.METHOD_NOT_ALLOWED);
+        writer.write(response);
     }
 
     static Path resolveRequestPath(Path basePath, String requestTarget) {
