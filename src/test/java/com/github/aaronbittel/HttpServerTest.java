@@ -6,10 +6,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.opentest4j.TestAbortedException;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -22,7 +24,7 @@ class HttpServerTest {
     private static final Path BASE_PATH = Path.of("base").toAbsolutePath().normalize();
 
     @Test
-    void root_request_resolves_to_index_html() {
+    void root_request_resolves_to_index_html() throws IOException {
         var expected = BASE_PATH.resolve("index.html");
         assertThat(HttpServer.resolveRequestPath(BASE_PATH, "/")).isEqualTo(expected);
     }
@@ -39,9 +41,30 @@ class HttpServerTest {
     }
 
     @Test
-    void normalize_dot_segments_in_request_path() {
+    void normalize_dot_segments_in_request_path() throws IOException {
         var expected = BASE_PATH.resolve("baz");
         assertThat(HttpServer.resolveRequestPath(BASE_PATH, "/foo/bar/../../baz")).isEqualTo(expected);
+    }
+
+    @Test
+    void reject_symlink_pointing_outside_of_root(@TempDir Path tempDir) throws IOException {
+        var fileOutsideRoot = tempDir.resolve("file-outside-root");
+        Files.writeString(fileOutsideRoot, "Hello, World!");
+
+        var root = tempDir.resolve("root");
+        Files.createDirectory(root);
+
+        var symPath = root.resolve("symlink");
+
+        try {
+            Files.createSymbolicLink(symPath, fileOutsideRoot);
+        } catch (FileSystemException e) {
+            throw new TestAbortedException("Symbolic links are unavailable in this environment: " + e);
+        }
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> HttpServer.resolveRequestPath(root, "/" + symPath.toString()))
+                .withMessage("Path traversal detected");
     }
 
     @Nested

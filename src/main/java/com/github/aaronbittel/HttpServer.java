@@ -117,7 +117,7 @@ public class HttpServer {
         writer.write(response);
     }
 
-    static Path resolveRequestPath(Path basePath, String requestTarget) {
+    static Path resolveRequestPath(Path rootPath, String requestTarget) throws IOException {
         if (!requestTarget.startsWith("/")) {
             throw new IllegalArgumentException("Expected an origin-form request target");
         }
@@ -126,9 +126,9 @@ public class HttpServer {
         if (relativeTarget.isEmpty()) {
             relativeTarget = "index.html";
         }
-        var resolvedTarget = basePath.resolve(relativeTarget).normalize();
+        var resolvedTarget = rootPath.resolve(relativeTarget).normalize().toRealPath();
 
-        if (!resolvedTarget.startsWith(basePath)) {
+        if (!resolvedTarget.startsWith(rootPath)) {
             throw new IllegalArgumentException("Path traversal detected");
         }
 
