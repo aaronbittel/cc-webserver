@@ -1,5 +1,6 @@
 package com.github.aaronbittel;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.github.aaronbittel.TestUtilis.buildHeaders;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +25,12 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 class HttpServerTest {
 
     private static final Path BASE_PATH = Path.of("base").toAbsolutePath().normalize();
+
+    @BeforeAll
+    static void set_log_level_to_warning() {
+        var log = Logger.getLogger(HttpServer.class.getName());
+        log.setLevel(Level.WARNING);
+    }
 
     @Test
     void root_request_resolves_to_index_html() throws IOException {
