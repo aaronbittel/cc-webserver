@@ -3,14 +3,22 @@ package com.github.aaronbittel;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class HttpServer {
     private static final Logger log = Logger.getLogger(HttpServer.class.getName());
+
+    private static final String HTML_TEMPLATE = loadHtml();
+
+    private static final String HTML_CONTENT_TYPE = "text/html; charset=UTF-8";
+    private static final String BINARY_CONTENT_TYPE = "application/octet-stream";
 
     private static final int BACKLOG = 5;
     private final ServerConfig config;
@@ -36,7 +44,7 @@ public class HttpServer {
                     try (client) {
                         handleConnection(client);
                     } catch (IOException e) {
-                        log.warning(e.getMessage());
+                        log.log(Level.WARNING, "Client connection failed", e);
                     }
                 });
             }
@@ -78,43 +86,147 @@ public class HttpServer {
         var resolvedTarget = resolveRequestPath(config.root(), request.requestLine().requestTarget());
         log.info("resolvedTarget: " + resolvedTarget);
 
-        HttpResponse response;
-        if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
-            response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND);
-        } else {
-            var content = Files.readAllBytes(resolvedTarget);
-            var contentLength = content.length;
-            var headers = new HttpHeaders();
-            headers.add("Content-Type", "text/html");
-            headers.add("Content-Length", String.valueOf(contentLength));
-            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, content);
+        var indexPath = resolvedTarget.resolve("index.html");
+        if (Files.isRegularFile(indexPath)) {
+            writeFile(writer, request, indexPath);
+            return;
         }
 
-        writer.write(response);
+        if (Files.isDirectory(resolvedTarget)) {
+            var content = renderDirectoryListing(resolvedTarget);
+            writeString(writer, request, content);
+            return;
+        }
+
+        if (!Files.exists(resolvedTarget)) {
+            writeNotFound(writer, request);
+            return;
+        }
+
+        if (Files.isRegularFile(resolvedTarget)) {
+            writeFile(writer, request, resolvedTarget);
+            return;
+        }
+
+        log.warning(resolvedTarget + ": exists, but neither a directory nor a regular file");
+        writeNotFound(writer, request);
     }
 
     void handleHead(ResponseWriter writer, HttpRequest request) throws IOException {
         var resolvedTarget = resolveRequestPath(config.root(), request.requestLine().requestTarget());
         log.info("resolvedTarget: " + resolvedTarget);
 
-        HttpResponse response;
-        if (!Files.exists(resolvedTarget) || !Files.isRegularFile(resolvedTarget)) {
-            response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND);
-        } else {
-            var content = Files.readAllBytes(resolvedTarget);
-            var contentLength = content.length;
-            var headers = new HttpHeaders();
-            headers.add("Content-Length", String.valueOf(contentLength));
-            headers.add("Content-Type", "text/html");
-            response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
+        var indexPath = resolvedTarget.resolve("index.html");
+        if (Files.isRegularFile(indexPath)) {
+            writeFileHeaders(writer, request, indexPath);
+            return;
         }
 
-        writer.write(response);
+        if (Files.isDirectory(resolvedTarget)) {
+            writeStringHeaders(writer, request, renderDirectoryListing(resolvedTarget));
+            return;
+        }
+
+        if (!Files.exists(resolvedTarget)) {
+            writeNotFound(writer, request);
+            return;
+        }
+
+        if (Files.isRegularFile(resolvedTarget)) {
+            writeFileHeaders(writer, request, resolvedTarget);
+            return;
+        }
+
+        log.warning(resolvedTarget + ": exists, but neither a directory nor a regular file");
+        writeNotFound(writer, request);
     }
 
     void handleUnsupportedMethod(ResponseWriter writer, HttpRequest request) throws IOException {
         var response = new HttpResponse(request.requestLine().version(), HttpStatus.METHOD_NOT_ALLOWED);
         writer.write(response);
+    }
+
+    void writeFile(ResponseWriter writer, HttpRequest request, Path path) throws IOException {
+        var content = Files.readAllBytes(path);
+        var headers = createFileHeaders(path);
+        writer.write(new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, content));
+    }
+
+    void writeString(ResponseWriter writer, HttpRequest request, String content) throws IOException {
+        var data = content.getBytes(StandardCharsets.UTF_8);
+        var contentLength = data.length;
+        var headers = createFileHeaders(contentLength, HttpServer.HTML_CONTENT_TYPE);
+        writer.write(new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, data));
+    }
+
+    void writeFileHeaders(ResponseWriter writer, HttpRequest request, Path path) throws IOException {
+        var headers = createFileHeaders(path);
+        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
+        writer.write(response);
+    }
+
+    void writeStringHeaders(ResponseWriter writer, HttpRequest request, String content) throws IOException {
+        var contentLength = content.getBytes(StandardCharsets.UTF_8).length;
+        var headers = createFileHeaders(contentLength, HTML_CONTENT_TYPE);
+        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
+        writer.write(response);
+    }
+
+    void writeNotFound(ResponseWriter writer, HttpRequest request) throws IOException {
+        var response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND);
+        writer.write(response);
+    }
+
+    HttpHeaders createFileHeaders(long contentLength, String contentType) {
+        var headers = new HttpHeaders();
+        headers.add("Content-Length", String.valueOf(contentLength));
+        headers.add("Content-Type", contentType);
+        return headers;
+    }
+
+    private HttpHeaders createFileHeaders(Path path) throws IOException {
+        String contentType = Files.probeContentType(path);
+
+        if (contentType == null) {
+            contentType = BINARY_CONTENT_TYPE;
+        }
+
+        return createFileHeaders(Files.size(path), contentType);
+    }
+
+    String renderDirectoryListing(Path directory) throws IOException {
+        var entries = generateDirectoryListingHtml(directory);
+        return HTML_TEMPLATE.replace("{{entries}}", entries);
+    }
+
+    String generateDirectoryListingHtml(Path directory) throws IOException {
+        var entries = new StringBuilder();
+
+        if (!directory.equals(config.root())) {
+            appendDirectoryEntryHtml(entries, toRootRelativeUrl(config.root(), directory.getParent()), "..");
+        }
+
+        try (var paths = Files.list(directory)) {
+            for (Path path : paths.sorted().toList()) {
+                appendDirectoryEntryHtml(entries, toRootRelativeUrl(config.root(), path), path.getFileName().toString());
+            }
+        }
+
+        return entries.toString();
+    }
+
+    private static String toRootRelativeUrl(Path root, Path path) {
+        return "/" + root.relativize(path)
+                .toString()
+                .replace(path.getFileSystem().getSeparator(), "/");
+    }
+
+    private void appendDirectoryEntryHtml(StringBuilder html, String linkPath, String displayName) {
+        html.append("<li><a href=\"")
+                .append(linkPath)
+                .append("\">")
+                .append(displayName)
+                .append("</a></li>\n");
     }
 
     static Path resolveRequestPath(Path rootPath, String requestTarget) throws IOException {
@@ -123,13 +235,13 @@ public class HttpServer {
         }
 
         var relativeTarget = requestTarget.substring(1);
-        if (relativeTarget.isEmpty()) {
-            relativeTarget = "index.html";
-        }
         var resolvedTarget = rootPath.resolve(relativeTarget).normalize();
 
         if (Files.isSymbolicLink(resolvedTarget)) {
-            resolvedTarget = Files.readSymbolicLink(resolvedTarget);
+            var symlinkTarget = Files.readSymbolicLink(resolvedTarget);
+            resolvedTarget = resolvedTarget.getParent()
+                    .resolve(symlinkTarget)
+                    .normalize();
         }
 
         if (!resolvedTarget.startsWith(rootPath)) {
@@ -137,5 +249,17 @@ public class HttpServer {
         }
 
         return resolvedTarget;
+    }
+
+    private static String loadHtml() {
+        try (var in = Main.class.getResourceAsStream("/index.html")) {
+            if (in == null) {
+                throw new IllegalStateException("index.html not found");
+            }
+
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to load index.html", e);
+        }
     }
 }

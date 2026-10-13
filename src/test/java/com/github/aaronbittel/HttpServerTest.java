@@ -33,12 +33,6 @@ class HttpServerTest {
     }
 
     @Test
-    void root_request_resolves_to_index_html() throws IOException {
-        var expected = BASE_PATH.resolve("index.html");
-        assertThat(HttpServer.resolveRequestPath(BASE_PATH, "/")).isEqualTo(expected);
-    }
-
-    @Test
     void reject_path_not_starting_with_slash() {
         assertThatIllegalArgumentException().isThrownBy(() -> HttpServer.resolveRequestPath(BASE_PATH, "some-path"));
     }
@@ -65,15 +59,27 @@ class HttpServerTest {
 
         var symPath = root.resolve("symlink");
 
-        try {
-            Files.createSymbolicLink(symPath, fileOutsideRoot);
-        } catch (FileSystemException e) {
-            throw new TestAbortedException("Symbolic links are unavailable in this environment: " + e);
-        }
+        createSymlinkOrAbort(symPath, fileOutsideRoot);
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> HttpServer.resolveRequestPath(root, "/" + symPath))
                 .withMessage("Path traversal detected");
+    }
+
+    @Test
+    void resolves_relative_symlink_inside_root(@TempDir Path tempDir) throws IOException {
+        Path root = Files.createDirectory(tempDir.resolve("www"));
+        Path documents = Files.createDirectory(root.resolve("documents"));
+
+        Path targetFile = documents.resolve("report.txt");
+        Files.writeString(targetFile, "Hello from the target");
+
+        Path symlink = root.resolve("latest.txt");
+        createSymlinkOrAbort(symlink, root.relativize(targetFile));
+
+        Path resolved = HttpServer.resolveRequestPath(root, "/latest.txt");
+
+        assertThat(targetFile.toRealPath()).isEqualTo(resolved.toRealPath());
     }
 
     @Nested
@@ -81,7 +87,7 @@ class HttpServerTest {
 
         @TempDir
         Path root;
-        String FILENAME = "hello-world";
+        String FILENAME = "hello-world.txt";
         String CONTENT = "Hello, World";
         String contentLength = String.valueOf(CONTENT.getBytes(StandardCharsets.UTF_8).length);
 
@@ -110,7 +116,7 @@ class HttpServerTest {
             void returns_file_contents_when_file_exists() throws IOException {
                 server.handleRequest(recorder, request(HttpMethod.GET, FILENAME));
 
-                var headers = buildHeaders("Content-Type", "text/html", "Content-Length", contentLength);
+                var headers = buildHeaders("Content-Type", "text/plain", "Content-Length", contentLength);
                 var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, CONTENT.getBytes(StandardCharsets.UTF_8));
 
                 assertThat(recorder.response()).isEqualTo(expected);
@@ -131,7 +137,7 @@ class HttpServerTest {
             void returns_headers_without_body_when_file_exists() throws IOException {
                 server.handleRequest(recorder, request(HttpMethod.HEAD, FILENAME));
 
-                var headers = buildHeaders("Content-Type", "text/html", "Content-Length", contentLength);
+                var headers = buildHeaders("Content-Type", "text/plain", "Content-Length", contentLength);
                 var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
                 assertThat(recorder.response()).isEqualTo(expected);
             }
@@ -169,6 +175,14 @@ class HttpServerTest {
 
             var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.METHOD_NOT_ALLOWED);
             assertThat(recorder.response()).isEqualTo(expected);
+        }
+    }
+
+    private static void createSymlinkOrAbort(Path link, Path target) throws IOException {
+        try {
+            Files.createSymbolicLink(link, target);
+        } catch (FileSystemException e) {
+            throw new TestAbortedException("Cannot create symbolic link; privileges may be missing", e);
         }
     }
 }
