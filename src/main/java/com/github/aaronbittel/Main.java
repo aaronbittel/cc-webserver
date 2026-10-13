@@ -8,7 +8,7 @@ public class Main {
 
     private static final String DEFAULT_ADDRESS = "127.0.0.1";
     private static final int DEFAULT_PORT = 80;
-    private static final Path DEFAULT_BASE_PATH = Path.of("./www").toAbsolutePath().normalize();
+    private static final Path DEFAULT_BASE_PATH = Path.of(".").toAbsolutePath().normalize();
 
     static void main() throws IOException {
         Path root;
