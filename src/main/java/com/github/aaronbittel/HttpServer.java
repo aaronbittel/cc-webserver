@@ -12,6 +12,14 @@ import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+sealed interface ResolvedResource {
+    record FileResource(Path path) implements ResolvedResource {}
+
+    record DirectoryListing(Path path) implements ResolvedResource {}
+
+    record NotFound() implements ResolvedResource {}
+}
+
 public class HttpServer {
     private static final Logger log = Logger.getLogger(HttpServer.class.getName());
 
@@ -82,63 +90,45 @@ public class HttpServer {
         }
     }
 
-    void handleGet(ResponseWriter writer, HttpRequest request) throws IOException {
-        var resolvedTarget = resolveRequestPath(config.root(), request.requestLine().requestTarget());
-        log.info("resolvedTarget: " + resolvedTarget);
+    private ResolvedResource resolveResource(String requestTarget) throws IOException {
+        var resolvedTarget = resolveRequestPath(config.root(), requestTarget);
 
         var indexPath = resolvedTarget.resolve("index.html");
         if (Files.isRegularFile(indexPath)) {
-            writeFile(writer, request, indexPath);
-            return;
+            return new ResolvedResource.FileResource(indexPath);
         }
 
         if (Files.isDirectory(resolvedTarget)) {
-            var content = renderDirectoryListing(resolvedTarget);
-            writeString(writer, request, content);
-            return;
-        }
-
-        if (!Files.exists(resolvedTarget)) {
-            writeNotFound(writer, request);
-            return;
+            return new ResolvedResource.DirectoryListing(resolvedTarget);
         }
 
         if (Files.isRegularFile(resolvedTarget)) {
-            writeFile(writer, request, resolvedTarget);
-            return;
+            return new ResolvedResource.FileResource(resolvedTarget);
         }
 
-        log.warning(resolvedTarget + ": exists, but neither a directory nor a regular file");
-        writeNotFound(writer, request);
+        return new ResolvedResource.NotFound();
+    }
+
+    void handleGet(ResponseWriter writer, HttpRequest request) throws IOException {
+        switch (resolveResource(request.requestLine().requestTarget())) {
+            case ResolvedResource.DirectoryListing directoryListing -> {
+                var content = renderDirectoryListing(directoryListing.path());
+                writeString(writer, request, content);
+            }
+            case ResolvedResource.FileResource fileResource -> writeFile(writer, request, fileResource.path());
+            case ResolvedResource.NotFound _ -> writeNotFound(writer, request);
+        }
     }
 
     void handleHead(ResponseWriter writer, HttpRequest request) throws IOException {
-        var resolvedTarget = resolveRequestPath(config.root(), request.requestLine().requestTarget());
-        log.info("resolvedTarget: " + resolvedTarget);
-
-        var indexPath = resolvedTarget.resolve("index.html");
-        if (Files.isRegularFile(indexPath)) {
-            writeFileHeaders(writer, request, indexPath);
-            return;
+        switch (resolveResource(request.requestLine().requestTarget())) {
+            case ResolvedResource.DirectoryListing directoryListing -> {
+                var content = renderDirectoryListing(directoryListing.path());
+                writeStringHeaders(writer, request, content);
+            }
+            case ResolvedResource.FileResource fileResource -> writeFileHeaders(writer, request, fileResource.path());
+            case ResolvedResource.NotFound _ -> writeNotFound(writer, request);
         }
-
-        if (Files.isDirectory(resolvedTarget)) {
-            writeStringHeaders(writer, request, renderDirectoryListing(resolvedTarget));
-            return;
-        }
-
-        if (!Files.exists(resolvedTarget)) {
-            writeNotFound(writer, request);
-            return;
-        }
-
-        if (Files.isRegularFile(resolvedTarget)) {
-            writeFileHeaders(writer, request, resolvedTarget);
-            return;
-        }
-
-        log.warning(resolvedTarget + ": exists, but neither a directory nor a regular file");
-        writeNotFound(writer, request);
     }
 
     void handleUnsupportedMethod(ResponseWriter writer, HttpRequest request) throws IOException {
