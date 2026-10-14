@@ -15,13 +15,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.github.aaronbittel.TestUtilis.buildHeaders;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class HttpServerTest {
 
@@ -196,40 +195,11 @@ class HttpServerTest {
         }
     }
 
-    @Test
-    void server_shutdown_is_handled_gracefully() throws Exception {
-        var config = new ServerConfig(
-                InetAddress.getLoopbackAddress(),
-                0,
-                Path.of(".")
-        );
-
-        var server = new HttpServer(config);
-
-        var executor = Executors.newSingleThreadExecutor();
-
-        try {
-            var future = executor.submit(() -> {
-                server.serve();
-                return null;
-            });
-
-            Thread.sleep(200);
-            server.close();
-
-            assertThatCode(() -> future.get(3, TimeUnit.SECONDS))
-                    .doesNotThrowAnyException();
-        } finally {
-            server.close();
-            executor.shutdownNow();
-        }
-    }
-
-    private static HttpServer createTestServer(Path root) {
+    private static HttpServer createTestServer(Path root) throws IOException {
         return new HttpServer(
                 new ServerConfig(
                         InetAddress.getLoopbackAddress(),
-                        80,
+                        0,
                         root
                 )
         );

@@ -33,11 +33,19 @@ public class HttpServer implements AutoCloseable {
     private static final int BACKLOG = 5;
 
     private final ServerConfig config;
-
-    private volatile ServerSocket server;
+    private volatile ServerSocket serverSocket;
 
     public HttpServer(ServerConfig config) {
         this.config = config;
+    }
+
+    public void bind() throws IOException {
+        this.serverSocket = new ServerSocket();
+        this.serverSocket.setReuseAddress(true);
+        this.serverSocket.bind(
+                new InetSocketAddress(config.address(), config.port()),
+                BACKLOG
+        );
     }
 
     public void serve() throws IOException {
@@ -49,16 +57,9 @@ public class HttpServer implements AutoCloseable {
                 config.port(),
                 config.root()));
 
-        server = new ServerSocket();
-        server.setReuseAddress(true);
-        server.bind(
-                new InetSocketAddress(config.address(), config.port()),
-                BACKLOG
-        );
-
         try {
-            while (!server.isClosed()) {
-                var client = server.accept();
+            while (!serverSocket.isClosed()) {
+                var client = serverSocket.accept();
                 Thread.ofVirtual().start(() -> {
                     try (client) {
                         handleConnection(client);
@@ -68,7 +69,7 @@ public class HttpServer implements AutoCloseable {
                 });
             }
         } catch (SocketException e) {
-            if (!server.isClosed()) {
+            if (!serverSocket.isClosed()) {
                 throw e;
             }
         }
@@ -283,10 +284,18 @@ public class HttpServer implements AutoCloseable {
         }
     }
 
+    public int port() {
+        if (serverSocket == null) {
+            throw new IllegalStateException("Server has not been started");
+        }
+
+        return serverSocket.getLocalPort();
+    }
+
     @Override
     public void close() throws IOException {
-        if (server != null) {
-            server.close();
+        if (serverSocket != null) {
+            serverSocket.close();
         }
     }
 }
