@@ -82,14 +82,37 @@ class HttpServerTest {
         assertThat(targetFile.toRealPath()).isEqualTo(resolved.toRealPath());
     }
 
+    @Test
+    void query_string_does_not_affect_resource_resolution(@TempDir Path tempDir) throws IOException {
+        var content = "index-file-content".getBytes(StandardCharsets.UTF_8);
+        var path = tempDir.resolve("index.html");
+        Files.write(path, content);
+
+        var server = createTestServer(tempDir);
+        var writer = new HttpResponseRecorder();
+        var request = request(HttpMethod.GET, "/index.html?lang=de");
+        server.handleRequest(writer, request);
+
+        var expected = new HttpResponse(
+                request.requestLine().version(),
+                HttpStatus.OK,
+                buildHeaders(
+                        "Content-Type", "text/html",
+                        "Content-Length", String.valueOf(content.length)
+                ),
+                content
+        );
+        assertThat(writer.response()).isEqualTo(expected);
+    }
+
     @Nested
     class HttpServerMethodTest {
 
         @TempDir
         Path root;
         String FILENAME = "hello-world.txt";
-        String CONTENT = "Hello, World";
-        String contentLength = String.valueOf(CONTENT.getBytes(StandardCharsets.UTF_8).length);
+        byte[] CONTENT = "Hello, World".getBytes(StandardCharsets.UTF_8);
+        String contentLength = String.valueOf(CONTENT.length);
 
         HttpServer server;
         HttpResponseRecorder recorder;
@@ -97,34 +120,27 @@ class HttpServerTest {
         @BeforeEach
         void setUp() throws IOException {
             var filepath = root.resolve(FILENAME);
-            Files.writeString(filepath, CONTENT);
+            Files.write(filepath, CONTENT);
 
-            server = new HttpServer(new ServerConfig(InetAddress.getLoopbackAddress(), 80, root));
+            server = createTestServer(root);
             recorder = new HttpResponseRecorder();
-        }
-
-        HttpRequest request(HttpMethod method, String targetPath) {
-            return new HttpRequest(
-                    new HttpRequestLine(method, "/" + targetPath, HttpVersion.HTTP_1_1),
-                    new HttpHeaders(), HttpResponse.EMPTY_BODY
-            );
         }
 
         @Nested
         class Get {
             @Test
             void returns_file_contents_when_file_exists() throws IOException {
-                server.handleRequest(recorder, request(HttpMethod.GET, FILENAME));
+                server.handleRequest(recorder, request(HttpMethod.GET, "/" + FILENAME));
 
                 var headers = buildHeaders("Content-Type", "text/plain", "Content-Length", contentLength);
-                var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, CONTENT.getBytes(StandardCharsets.UTF_8));
+                var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, CONTENT);
 
                 assertThat(recorder.response()).isEqualTo(expected);
             }
 
             @Test
             void returns_not_found_when_file_does_not_exist() throws IOException {
-                server.handleRequest(recorder, request(HttpMethod.GET, "unknown-file"));
+                server.handleRequest(recorder, request(HttpMethod.GET, "/unknown-file"));
 
                 var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
                 assertThat(recorder.response()).isEqualTo(expected);
@@ -135,7 +151,7 @@ class HttpServerTest {
         class Head {
             @Test
             void returns_headers_without_body_when_file_exists() throws IOException {
-                server.handleRequest(recorder, request(HttpMethod.HEAD, FILENAME));
+                server.handleRequest(recorder, request(HttpMethod.HEAD, "/" + FILENAME));
 
                 var headers = buildHeaders("Content-Type", "text/plain", "Content-Length", contentLength);
                 var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
@@ -144,7 +160,7 @@ class HttpServerTest {
 
             @Test
             void returns_not_found_when_file_does_not_exist() throws IOException {
-                server.handleRequest(recorder, request(HttpMethod.HEAD, "unknown-file"));
+                server.handleRequest(recorder, request(HttpMethod.HEAD, "/unknown-file"));
 
                 var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
                 assertThat(recorder.response()).isEqualTo(expected);
@@ -178,11 +194,29 @@ class HttpServerTest {
         }
     }
 
+    private static HttpServer createTestServer(Path root) {
+        return new HttpServer(
+                new ServerConfig(
+                        InetAddress.getLoopbackAddress(),
+                        80,
+                        root
+                )
+        );
+    }
+
     private static void createSymlinkOrAbort(Path link, Path target) throws IOException {
         try {
             Files.createSymbolicLink(link, target);
         } catch (FileSystemException e) {
             throw new TestAbortedException("Cannot create symbolic link; privileges may be missing", e);
         }
+    }
+
+    private static HttpRequest request(HttpMethod method, String requestString) {
+        return new HttpRequest(
+                new HttpRequestLine(method, requestString, HttpVersion.HTTP_1_1),
+                new HttpHeaders(),
+                HttpResponse.EMPTY_BODY
+        );
     }
 }

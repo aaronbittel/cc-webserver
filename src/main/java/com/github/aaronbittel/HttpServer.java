@@ -25,7 +25,7 @@ public class HttpServer {
 
     private static final String HTML_TEMPLATE = loadHtml();
 
-    private static final String HTML_CONTENT_TYPE = "text/html; charset=UTF-8";
+    private static final String HTML_CONTENT_TYPE = "text/html";
     private static final String BINARY_CONTENT_TYPE = "application/octet-stream";
 
     private static final int BACKLOG = 5;
@@ -91,7 +91,8 @@ public class HttpServer {
     }
 
     private ResolvedResource resolveResource(String requestTarget) throws IOException {
-        var resolvedTarget = resolveRequestPath(config.root(), requestTarget);
+        var requestPath = extractPath(requestTarget);
+        var resolvedTarget = resolveRequestPath(config.root(), requestPath);
 
         var indexPath = resolvedTarget.resolve("index.html");
         if (Files.isRegularFile(indexPath)) {
@@ -107,6 +108,20 @@ public class HttpServer {
         }
 
         return new ResolvedResource.NotFound();
+    }
+
+    /**
+     * Extracts the path component from the HTTP request-target.
+     *
+     * @param requestTarget the HTTP request-target, potentially including a query-string.
+     * @return the path without the query string.
+     */
+    private String extractPath(String requestTarget) {
+        var index = requestTarget.indexOf('?');
+        if (index == -1) {
+            return requestTarget;
+        }
+        return requestTarget.substring(0, index);
     }
 
     void handleGet(ResponseWriter writer, HttpRequest request) throws IOException {
