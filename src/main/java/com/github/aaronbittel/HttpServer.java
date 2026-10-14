@@ -4,6 +4,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -48,8 +49,12 @@ public class HttpServer implements AutoCloseable {
                 config.port(),
                 config.root()));
 
-        server = new ServerSocket(config.port(), BACKLOG, config.address());
+        server = new ServerSocket();
         server.setReuseAddress(true);
+        server.bind(
+                new InetSocketAddress(config.address(), config.port()),
+                BACKLOG
+        );
 
         try {
             while (!server.isClosed()) {
