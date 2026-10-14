@@ -5,6 +5,10 @@ import java.util.Objects;
 
 public record HttpRequest(HttpRequestLine requestLine, HttpHeaders headers, byte[] body) {
 
+    public HttpRequest(HttpRequestLine requestLine, HttpHeaders headers) {
+        this(requestLine, headers, new byte[0]);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof HttpRequest(HttpRequestLine line, HttpHeaders otherHeaders, byte[] otherBody))) return false;

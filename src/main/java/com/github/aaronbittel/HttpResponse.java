@@ -6,10 +6,12 @@ import java.util.Objects;
 public record HttpResponse(HttpVersion version, HttpStatus status, HttpHeaders headers, byte[] body) {
 
     public HttpResponse(HttpVersion version, HttpStatus status) {
-        this(version, status, new HttpHeaders(), EMPTY_BODY);
+        this(version, status, new HttpHeaders(), new byte[0]);
     }
 
-    public static final byte[] EMPTY_BODY = new byte[0];
+    public HttpResponse(HttpVersion version, HttpStatus status, HttpHeaders headers) {
+        this(version, status, headers, new byte[0]);
+    }
 
     @Override
     public boolean equals(Object o) {

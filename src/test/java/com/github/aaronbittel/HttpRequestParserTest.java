@@ -34,8 +34,7 @@ class HttpRequestParserTest {
 
         var expected = new HttpRequest(
                 new HttpRequestLine(HttpMethod.GET, "/hello-world", HttpVersion.HTTP_1_1),
-                new HttpHeaders(),
-                HttpResponse.EMPTY_BODY
+                new HttpHeaders()
         );
         assertThat(parser.parseRequest()).isEqualTo(expected);
     }

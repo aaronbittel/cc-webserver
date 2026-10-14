@@ -154,7 +154,7 @@ class HttpServerTest {
                 server.handleRequest(recorder, request(HttpMethod.HEAD, "/" + FILENAME));
 
                 var headers = buildHeaders("Content-Type", "text/plain", "Content-Length", contentLength);
-                var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
+                var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers);
                 assertThat(recorder.response()).isEqualTo(expected);
             }
 
@@ -216,7 +216,7 @@ class HttpServerTest {
         return new HttpRequest(
                 new HttpRequestLine(method, requestString, HttpVersion.HTTP_1_1),
                 new HttpHeaders(),
-                HttpResponse.EMPTY_BODY
+                new byte[0]
         );
     }
 }

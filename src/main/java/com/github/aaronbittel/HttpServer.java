@@ -166,14 +166,14 @@ public class HttpServer {
 
     void writeFileHeaders(ResponseWriter writer, HttpRequest request, Path path) throws IOException {
         var headers = createFileHeaders(path);
-        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
+        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers);
         writer.write(response);
     }
 
     void writeStringHeaders(ResponseWriter writer, HttpRequest request, String content) throws IOException {
         var contentLength = content.getBytes(StandardCharsets.UTF_8).length;
         var headers = createFileHeaders(contentLength, HTML_CONTENT_TYPE);
-        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, HttpResponse.EMPTY_BODY);
+        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers);
         writer.write(response);
     }
 
