@@ -25,7 +25,19 @@ public class Main {
         }
 
         var config = new ServerConfig(address, port, root);
-        new HttpServer(config).serve();
+
+        try (var server = new HttpServer(config)) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("Shutting down server...");
+                try {
+                    server.close();
+                } catch (IOException e) {
+                    System.err.println("Error shutting down server: " + e.getMessage());
+                }
+            }
+            ));
+            server.serve();
+        }
     }
 
     private static String readEnvVar(String name, String fallback) {

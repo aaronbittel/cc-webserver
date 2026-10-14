@@ -15,12 +15,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.github.aaronbittel.TestUtilis.buildHeaders;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.*;
 
 class HttpServerTest {
 
@@ -88,21 +89,22 @@ class HttpServerTest {
         var path = tempDir.resolve("index.html");
         Files.write(path, content);
 
-        var server = createTestServer(tempDir);
-        var writer = new HttpResponseRecorder();
-        var request = request(HttpMethod.GET, "/index.html?lang=de");
-        server.handleRequest(writer, request);
+        try (var server = createTestServer(tempDir)) {
+            var writer = new HttpResponseRecorder();
+            var request = request(HttpMethod.GET, "/index.html?lang=de");
+            server.handleRequest(writer, request);
 
-        var expected = new HttpResponse(
-                request.requestLine().version(),
-                HttpStatus.OK,
-                buildHeaders(
-                        "Content-Type", "text/html",
-                        "Content-Length", String.valueOf(content.length)
-                ),
-                content
-        );
-        assertThat(writer.response()).isEqualTo(expected);
+            var expected = new HttpResponse(
+                    request.requestLine().version(),
+                    HttpStatus.OK,
+                    buildHeaders(
+                            "Content-Type", "text/html",
+                            "Content-Length", String.valueOf(content.length)
+                    ),
+                    content
+            );
+            assertThat(writer.response()).isEqualTo(expected);
+        }
     }
 
     @Nested
@@ -191,6 +193,35 @@ class HttpServerTest {
 
             var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.METHOD_NOT_ALLOWED);
             assertThat(recorder.response()).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void server_shutdown_is_handled_gracefully() throws Exception {
+        var config = new ServerConfig(
+                InetAddress.getLoopbackAddress(),
+                0,
+                Path.of(".")
+        );
+
+        var server = new HttpServer(config);
+
+        var executor = Executors.newSingleThreadExecutor();
+
+        try {
+            var future = executor.submit(() -> {
+                server.serve();
+                return null;
+            });
+
+            Thread.sleep(200);
+            server.close();
+
+            assertThatCode(() -> future.get(3, TimeUnit.SECONDS))
+                    .doesNotThrowAnyException();
+        } finally {
+            server.close();
+            executor.shutdownNow();
         }
     }
 

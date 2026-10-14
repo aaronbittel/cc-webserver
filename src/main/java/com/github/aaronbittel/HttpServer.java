@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,7 +21,7 @@ sealed interface ResolvedResource {
     record NotFound() implements ResolvedResource {}
 }
 
-public class HttpServer {
+public class HttpServer implements AutoCloseable {
     private static final Logger log = Logger.getLogger(HttpServer.class.getName());
 
     private static final String HTML_TEMPLATE = loadHtml();
@@ -29,7 +30,10 @@ public class HttpServer {
     private static final String BINARY_CONTENT_TYPE = "application/octet-stream";
 
     private static final int BACKLOG = 5;
+
     private final ServerConfig config;
+
+    private volatile ServerSocket server;
 
     public HttpServer(ServerConfig config) {
         this.config = config;
@@ -44,9 +48,11 @@ public class HttpServer {
                 config.port(),
                 config.root()));
 
-        try (var server = new ServerSocket(config.port(), BACKLOG, config.address())) {
-            server.setReuseAddress(true);
-            while (true) {
+        server = new ServerSocket(config.port(), BACKLOG, config.address());
+        server.setReuseAddress(true);
+
+        try {
+            while (!server.isClosed()) {
                 var client = server.accept();
                 Thread.ofVirtual().start(() -> {
                     try (client) {
@@ -55,6 +61,10 @@ public class HttpServer {
                         log.log(Level.WARNING, "Client connection failed", e);
                     }
                 });
+            }
+        } catch (SocketException e) {
+            if (!server.isClosed()) {
+                throw e;
             }
         }
     }
@@ -265,6 +275,13 @@ public class HttpServer {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load index.html", e);
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (server != null) {
+            server.close();
         }
     }
 }
