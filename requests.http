@@ -1,0 +1,11 @@
+### Get Root
+
+GET localhost:80/static/
+
+### Head Root
+
+HEAD localhost:80/static/
+
+### Get Current Time
+
+GET localhost:80/time
