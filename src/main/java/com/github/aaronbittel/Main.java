@@ -2,7 +2,10 @@ package com.github.aaronbittel;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class Main {
 
@@ -29,7 +32,17 @@ public class Main {
         var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(config.root()), "/static");
 
         var router = new Router()
-                .add(HttpMethod.GET, "/static/", staticFileHandler);
+                .add(HttpMethod.GET, "/static/", staticFileHandler)
+                .add(HttpMethod.GET, "/time", (writer, request) -> {
+                    var now = LocalDateTime.now()
+                            .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+                    var body = now.getBytes(StandardCharsets.UTF_8);
+                    var headers = new HttpHeaders()
+                            .add("Content-Length", String.valueOf(body.length))
+                            .add("Content-Type", "text/plain");
+                    writer.write(new HttpResponse(request.version(), HttpStatus.OK, headers, body));
+                });
 
         try (var server = new HttpServer(config, router)) {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {

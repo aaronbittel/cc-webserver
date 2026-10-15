@@ -1,12 +1,17 @@
 package com.github.aaronbittel;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.TreeMap;
 
 public class HttpHeaders implements Iterable<Map.Entry<String, String>> {
 
     private final Map<String, String> headers = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
-    public void add(String key, String value) {
+    public HttpHeaders add(String key, String value) {
         if (!HttpHeaderValidator.isValidFieldName(key)) {
             throw new IllegalArgumentException("Illegal field name");
         }
@@ -16,6 +21,7 @@ public class HttpHeaders implements Iterable<Map.Entry<String, String>> {
         }
 
         headers.put(key, value);
+        return this;
     }
 
     public Optional<String> get(String key) {
