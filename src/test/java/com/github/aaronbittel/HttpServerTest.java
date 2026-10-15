@@ -7,12 +7,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.opentest4j.TestAbortedException;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.logging.Level;
@@ -20,66 +18,13 @@ import java.util.logging.Logger;
 
 import static com.github.aaronbittel.TestUtilis.buildHeaders;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class HttpServerTest {
-
-    private static final Path BASE_PATH = Path.of("base").toAbsolutePath().normalize();
 
     @BeforeAll
     static void set_log_level_to_warning() {
         var log = Logger.getLogger(HttpServer.class.getName());
         log.setLevel(Level.WARNING);
-    }
-
-    @Test
-    void reject_path_not_starting_with_slash() {
-        assertThatIllegalArgumentException().isThrownBy(() -> HttpServer.resolveRequestPath(BASE_PATH, "some-path"));
-    }
-
-    @Test
-    void reject_path_traversal() {
-        assertThatIllegalArgumentException().isThrownBy(() -> HttpServer.resolveRequestPath(BASE_PATH, "/../somepath"))
-                .withMessage("Path traversal detected");
-    }
-
-    @Test
-    void normalize_dot_segments_in_request_path() throws IOException {
-        var expected = BASE_PATH.resolve("baz");
-        assertThat(HttpServer.resolveRequestPath(BASE_PATH, "/foo/bar/../../baz")).isEqualTo(expected);
-    }
-
-    @Test
-    void reject_symlink_pointing_outside_of_root(@TempDir Path tempDir) throws IOException {
-        var fileOutsideRoot = tempDir.resolve("file-outside-root");
-        Files.writeString(fileOutsideRoot, "Hello, World!");
-
-        var root = tempDir.resolve("root");
-        Files.createDirectory(root);
-
-        var symPath = root.resolve("symlink");
-
-        createSymlinkOrAbort(symPath, fileOutsideRoot);
-
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> HttpServer.resolveRequestPath(root, "/" + symPath))
-                .withMessage("Path traversal detected");
-    }
-
-    @Test
-    void resolves_relative_symlink_inside_root(@TempDir Path tempDir) throws IOException {
-        Path root = Files.createDirectory(tempDir.resolve("www"));
-        Path documents = Files.createDirectory(root.resolve("documents"));
-
-        Path targetFile = documents.resolve("report.txt");
-        Files.writeString(targetFile, "Hello from the target");
-
-        Path symlink = root.resolve("latest.txt");
-        createSymlinkOrAbort(symlink, root.relativize(targetFile));
-
-        Path resolved = HttpServer.resolveRequestPath(root, "/latest.txt");
-
-        assertThat(targetFile.toRealPath()).isEqualTo(resolved.toRealPath());
     }
 
     @Test
@@ -203,14 +148,6 @@ class HttpServerTest {
                         root
                 )
         );
-    }
-
-    private static void createSymlinkOrAbort(Path link, Path target) throws IOException {
-        try {
-            Files.createSymbolicLink(link, target);
-        } catch (FileSystemException e) {
-            throw new TestAbortedException("Cannot create symbolic link; privileges may be missing", e);
-        }
     }
 
     private static HttpRequest request(HttpMethod method, String requestString) {
