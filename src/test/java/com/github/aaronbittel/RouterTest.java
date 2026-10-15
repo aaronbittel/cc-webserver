@@ -18,6 +18,7 @@ public class RouterTest {
 
     private static final HttpHandler NO_OP_HANDLER = (_, _) -> {};
     private static final HttpHandler OK_RESPONSE_WRITER = (writer, _) -> writer.write(OK_RESPONSE);
+    private static final HttpHandler NOT_FOUND_RESPONSE_WRITER = (writer, _) -> writer.write(NOT_FOUND_RESPONSE);
     private HttpResponseRecorder recorder;
 
     @BeforeEach
@@ -166,6 +167,25 @@ public class RouterTest {
                 .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
 
         router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static/docs"));
+        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
+    }
+
+    @Test
+    void falls_back_to_get_route_when_head_route_is_not_defined() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+
+        router.handleRequest(recorder, TestUtilis.request(HttpMethod.HEAD, "/static"));
+        assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
+    }
+
+    @Test
+    void prefers_explicit_head_route_over_get_route() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER)
+                .add(HttpMethod.HEAD, "/static", NOT_FOUND_RESPONSE_WRITER);
+
+        router.handleRequest(recorder, TestUtilis.request(HttpMethod.HEAD, "/static"));
         assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
     }
 }

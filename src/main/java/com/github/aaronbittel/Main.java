@@ -29,8 +29,7 @@ public class Main {
         var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(config.root()), "/static");
 
         var router = new Router()
-                .add(HttpMethod.GET, "/static/", staticFileHandler)
-                .add(HttpMethod.HEAD, "/static/", staticFileHandler);
+                .add(HttpMethod.GET, "/static/", staticFileHandler);
 
         try (var server = new HttpServer(config, router)) {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {

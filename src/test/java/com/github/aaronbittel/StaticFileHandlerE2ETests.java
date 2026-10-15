@@ -59,8 +59,7 @@ public class StaticFileHandlerE2ETests {
         );
 
         Router router = new Router()
-                .add(HttpMethod.GET, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"))
-                .add(HttpMethod.HEAD, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"));
+                .add(HttpMethod.GET, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"));
 
         server = new HttpServer(config, router);
         server.bind();
@@ -155,6 +154,21 @@ public class StaticFileHandlerE2ETests {
         assertDirectoryEntry(response.body(), "../");
         assertDirectoryEntry(response.body(), "first.txt");
         assertDirectoryEntry(response.body(), "second.txt");
+    }
+
+    @Test
+    void head_request_to_get_route_returns_headers_without_body() throws Exception {
+        var fileContent = "file-content".getBytes(StandardCharsets.UTF_8);
+        Files.write(root.resolve("docs.txt"), fileContent);
+
+        var headResponse = head("/static/docs.txt");
+        var getResponse = get("/static/docs.txt");
+
+        assertThat(headResponse.statusCode()).isEqualTo(200);
+        assertThat(headResponse.body()).isEmpty();
+        assertThat(headResponse.headers().firstValue("Content-Length"))
+                .isEqualTo(getResponse.headers().firstValue("Content-Length"));
+        assertThat(getResponse.body()).isEqualTo(new String(fileContent));
     }
 
     private HttpResponse<String> get(String resource) throws IOException, InterruptedException {

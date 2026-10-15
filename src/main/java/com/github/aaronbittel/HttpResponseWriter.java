@@ -7,9 +7,19 @@ import java.nio.charset.StandardCharsets;
 public class HttpResponseWriter implements ResponseWriter {
 
     private final OutputStream out;
+    private final boolean shouldWriteBody;
 
-    public HttpResponseWriter(OutputStream out) {
+    private HttpResponseWriter(OutputStream out, boolean shouldWriteBody) {
         this.out = out;
+        this.shouldWriteBody = shouldWriteBody;
+    }
+
+    public static HttpResponseWriter withBody(OutputStream out) {
+        return new HttpResponseWriter(out, true);
+    }
+
+    public static HttpResponseWriter withoutBody(OutputStream out) {
+        return new HttpResponseWriter(out, false);
     }
 
     @Override
@@ -21,7 +31,10 @@ public class HttpResponseWriter implements ResponseWriter {
         }
 
         writeCrlf();
-        out.write(response.body());
+
+        if (shouldWriteBody) {
+            out.write(response.body());
+        }
 
         out.flush();
     }

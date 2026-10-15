@@ -65,7 +65,7 @@ public class HttpServer implements AutoCloseable {
         log.info("accepted client: " + client.getLocalSocketAddress());
 
         var parser = new HttpRequestParser(new BufferedInputStream(client.getInputStream()));
-        var writer = new HttpResponseWriter(new BufferedOutputStream(client.getOutputStream()));
+        var out = new BufferedOutputStream(client.getOutputStream());
 
         HttpRequest request;
         HttpResponse response;
@@ -75,9 +75,17 @@ public class HttpServer implements AutoCloseable {
         } catch (IllegalArgumentException e) {
             log.warning("Invalid HTTP request: " + e.getMessage());
 
+            var writer = HttpResponseWriter.withBody(out);
             response = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.BAD_REQUEST);
             writer.write(response);
             return;
+        }
+
+        ResponseWriter writer;
+        if (request.method() == HttpMethod.HEAD) {
+            writer = HttpResponseWriter.withoutBody(out);
+        } else {
+            writer = HttpResponseWriter.withBody(out);
         }
 
         log.info("request:" + request.requestLine());

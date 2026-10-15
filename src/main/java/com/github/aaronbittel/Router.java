@@ -17,14 +17,26 @@ public class Router implements HttpHandler {
             return;
         }
 
-        var routes = route.orElseThrow();
+        var handler = findHandler(route.orElseThrow(), request.method());
 
-        if (!routes.containsKey(request.method())) {
+        if (handler.isEmpty()) {
             writeMethodNotAllowed(writer, request);
             return;
         }
 
-        routes.get(request.method()).handleRequest(writer, request);
+        handler.orElseThrow().handleRequest(writer, request);
+    }
+
+    private Optional<HttpHandler> findHandler(Map<HttpMethod, HttpHandler> routes, HttpMethod method) {
+        if (routes.containsKey(method)) {
+            return Optional.of(routes.get(method));
+        }
+
+        if (method != HttpMethod.HEAD) {
+            return Optional.empty();
+        }
+
+        return Optional.ofNullable(routes.get(HttpMethod.GET));
     }
 
     /**
