@@ -35,7 +35,7 @@ public record StaticFileHandler(Path root) implements HttpHandler {
     }
 
     private void handleGet(ResponseWriter writer, HttpRequest request) throws IOException {
-        switch (resolveResource(request.requestLine().requestTarget())) {
+        switch (resolveResource(request)) {
             case ResolvedResource.DirectoryListing directoryListing -> {
                 var content = renderDirectoryListing(directoryListing.path());
                 writeString(writer, request, content);
@@ -46,7 +46,7 @@ public record StaticFileHandler(Path root) implements HttpHandler {
     }
 
     private void handleHead(ResponseWriter writer, HttpRequest request) throws IOException {
-        switch (resolveResource(request.requestLine().requestTarget())) {
+        switch (resolveResource(request)) {
             case ResolvedResource.DirectoryListing directoryListing -> {
                 var content = renderDirectoryListing(directoryListing.path());
                 writeStringHeaders(writer, request, content);
@@ -56,8 +56,8 @@ public record StaticFileHandler(Path root) implements HttpHandler {
         }
     }
 
-    private ResolvedResource resolveResource(String requestTarget) throws IOException {
-        var requestPath = extractPath(requestTarget);
+    private ResolvedResource resolveResource(HttpRequest request) throws IOException {
+        var requestPath = request.path();
         var resolvedTarget = resolveRequestPath(root, requestPath);
 
         var indexPath = resolvedTarget.resolve("index.html");
@@ -74,20 +74,6 @@ public record StaticFileHandler(Path root) implements HttpHandler {
         }
 
         return new ResolvedResource.NotFound();
-    }
-
-    /**
-     * Extracts the path component from the HTTP request-target.
-     *
-     * @param requestTarget the HTTP request-target, potentially including a query-string.
-     * @return the path without the query string.
-     */
-    private String extractPath(String requestTarget) {
-        var index = requestTarget.indexOf('?');
-        if (index == -1) {
-            return requestTarget;
-        }
-        return requestTarget.substring(0, index);
     }
 
     void writeFile(ResponseWriter writer, HttpRequest request, Path path) throws IOException {

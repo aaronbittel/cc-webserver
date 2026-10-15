@@ -14,4 +14,20 @@ public class TestUtilis {
 
         return headers;
     }
+
+    public static HttpRequest request(HttpMethod method, String requestString) {
+        return new HttpRequest(
+                new HttpRequestLine(method, requestString, HttpVersion.HTTP_1_1),
+                new HttpHeaders(),
+                new byte[0]
+        );
+    }
+
+    public static HttpRequest request(HttpMethod method, String requestString, HttpHeaders headers, byte[] body) {
+        return new HttpRequest(
+                new HttpRequestLine(method, requestString, HttpVersion.HTTP_1_1),
+                headers,
+                body
+        );
+    }
 }

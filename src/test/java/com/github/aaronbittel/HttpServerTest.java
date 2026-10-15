@@ -17,6 +17,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.github.aaronbittel.TestUtilis.buildHeaders;
+import static com.github.aaronbittel.TestUtilis.request;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class HttpServerTest {
@@ -35,7 +36,7 @@ class HttpServerTest {
 
         try (var server = createTestServer(tempDir)) {
             var writer = new HttpResponseRecorder();
-            var request = request(HttpMethod.GET, "/index.html?lang=de");
+            var request = TestUtilis.request(HttpMethod.GET, "/index.html?lang=de");
             server.handleRequest(writer, request);
 
             var expected = new HttpResponse(
@@ -140,21 +141,13 @@ class HttpServerTest {
         }
     }
 
-    private static HttpServer createTestServer(Path root) throws IOException {
+    private static HttpServer createTestServer(Path root) {
         return new HttpServer(
                 new ServerConfig(
                         InetAddress.getLoopbackAddress(),
                         0,
                         root
                 )
-        );
-    }
-
-    private static HttpRequest request(HttpMethod method, String requestString) {
-        return new HttpRequest(
-                new HttpRequestLine(method, requestString, HttpVersion.HTTP_1_1),
-                new HttpHeaders(),
-                new byte[0]
         );
     }
 }
