@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static com.github.aaronbittel.TestUtilis.buildHeaders;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIOException;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class HttpRequestParserTest {
 
@@ -34,7 +36,8 @@ class HttpRequestParserTest {
 
         var expected = new HttpRequest(
                 new HttpRequestLine(HttpMethod.GET, "/hello-world", HttpVersion.HTTP_1_1),
-                new HttpHeaders()
+                new HttpHeaders(),
+                new byte[0]
         );
         assertThat(parser.parseRequest()).isEqualTo(expected);
     }

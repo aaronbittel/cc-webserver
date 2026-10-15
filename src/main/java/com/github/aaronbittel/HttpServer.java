@@ -85,14 +85,14 @@ public class HttpServer implements AutoCloseable {
     }
 
     void handleRequest(ResponseWriter writer, HttpRequest request) throws IOException {
-        switch (request.requestLine().method()) {
+        switch (request.method()) {
             case HEAD, GET -> staticFileHandler.handleRequest(writer, request);
             default -> handleUnsupportedMethod(writer, request);
         }
     }
 
     void handleUnsupportedMethod(ResponseWriter writer, HttpRequest request) throws IOException {
-        var response = new HttpResponse(request.requestLine().version(), HttpStatus.METHOD_NOT_ALLOWED);
+        var response = new HttpResponse(request.version(), HttpStatus.METHOD_NOT_ALLOWED);
         writer.write(response);
     }
 

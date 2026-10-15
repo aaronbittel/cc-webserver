@@ -40,7 +40,7 @@ class HttpServerTest {
             server.handleRequest(writer, request);
 
             var expected = new HttpResponse(
-                    request.requestLine().version(),
+                    request.version(),
                     HttpStatus.OK,
                     buildHeaders(
                             "Content-Type", "text/html",
@@ -121,7 +121,7 @@ class HttpServerTest {
                 names = {"GET", "HEAD"}
         )
         void returns_method_not_allowed_for_existing_file(HttpMethod method) throws IOException {
-            server.handleRequest(recorder, request(method, FILENAME));
+            server.handleRequest(recorder, request(method, "/" + FILENAME));
 
             var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.METHOD_NOT_ALLOWED);
             assertThat(recorder.response()).isEqualTo(expected);
@@ -134,7 +134,7 @@ class HttpServerTest {
                 names = {"GET", "HEAD"}
         )
         void returns_method_not_allowed_for_not_existing_file(HttpMethod method) throws IOException {
-            server.handleRequest(recorder, request(method, "unknown-file"));
+            server.handleRequest(recorder, request(method, "/unknown-file"));
 
             var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.METHOD_NOT_ALLOWED);
             assertThat(recorder.response()).isEqualTo(expected);

@@ -2,37 +2,37 @@ package com.github.aaronbittel;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.Optional;
 
-public record HttpRequest(HttpRequestLine requestLine, HttpHeaders headers, byte[] body) {
+public class HttpRequest {
 
-    public HttpRequest(HttpRequestLine requestLine, HttpHeaders headers) {
-        this(requestLine, headers, new byte[0]);
+    private final HttpRequestLine requestLine;
+    private final HttpHeaders headers;
+    private final byte[] body;
+    private final RequestTarget requestTarget;
+
+    public HttpRequest(HttpRequestLine requestLine, HttpHeaders headers, byte[] body) {
+        this.requestLine = requestLine;
+        this.headers = headers;
+        this.body = body;
+        this.requestTarget = RequestTarget.parse(requestLine.requestTarget());
     }
 
     public String path() {
-        int index = requestLine.requestTarget().indexOf('?');
-        if (index == -1) {
-            return requestLine.requestTarget();
-        }
-        return requestLine.requestTarget().substring(0, index);
+        return requestTarget.path();
     }
 
-    public Optional<String> query() {
-        int index = requestLine.requestTarget().indexOf('?');
-        if (index == -1) {
-            return Optional.empty();
-        }
+    public HttpMethod method() {
+        return requestLine.method();
+    }
 
-        return Optional.of(requestLine.requestTarget().substring(index + 1));
+    public HttpVersion version() {
+        return requestLine.version();
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof HttpRequest(HttpRequestLine line, HttpHeaders otherHeaders, byte[] otherBody))) return false;
-        return Objects.equals(requestLine, line)
-                && Objects.equals(headers, otherHeaders)
-                && Arrays.equals(body, otherBody);
+        if (!(o instanceof HttpRequest that)) return false;
+        return Objects.equals(requestLine, that.requestLine) && Objects.equals(headers, that.headers) && Arrays.equals(body, that.body);
     }
 
     @Override

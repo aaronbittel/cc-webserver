@@ -27,7 +27,7 @@ public record StaticFileHandler(Path root) implements HttpHandler {
 
     @Override
     public void handleRequest(ResponseWriter writer, HttpRequest request) throws IOException {
-        switch (request.requestLine().method()) {
+        switch (request.method()) {
             case GET -> handleGet(writer, request);
             case HEAD -> handleHead(writer, request);
             default -> throw new IllegalStateException("must be GET or HEAD");
@@ -79,12 +79,12 @@ public record StaticFileHandler(Path root) implements HttpHandler {
     void writeFile(ResponseWriter writer, HttpRequest request, Path path) throws IOException {
         var content = Files.readAllBytes(path);
         var headers = createFileHeaders(path);
-        writer.write(new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, content));
+        writer.write(new HttpResponse(request.version(), HttpStatus.OK, headers, content));
     }
 
     void writeFileHeaders(ResponseWriter writer, HttpRequest request, Path path) throws IOException {
         var headers = createFileHeaders(path);
-        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers);
+        var response = new HttpResponse(request.version(), HttpStatus.OK, headers);
         writer.write(response);
     }
 
@@ -92,18 +92,18 @@ public record StaticFileHandler(Path root) implements HttpHandler {
         var data = content.getBytes(StandardCharsets.UTF_8);
         var contentLength = data.length;
         var headers = createFileHeaders(contentLength, HTML_CONTENT_TYPE);
-        writer.write(new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers, data));
+        writer.write(new HttpResponse(request.version(), HttpStatus.OK, headers, data));
     }
 
     void writeStringHeaders(ResponseWriter writer, HttpRequest request, String content) throws IOException {
         var contentLength = content.getBytes(StandardCharsets.UTF_8).length;
         var headers = createFileHeaders(contentLength, HTML_CONTENT_TYPE);
-        var response = new HttpResponse(request.requestLine().version(), HttpStatus.OK, headers);
+        var response = new HttpResponse(request.version(), HttpStatus.OK, headers);
         writer.write(response);
     }
 
     void writeNotFound(ResponseWriter writer, HttpRequest request) throws IOException {
-        var response = new HttpResponse(request.requestLine().version(), HttpStatus.NOT_FOUND);
+        var response = new HttpResponse(request.version(), HttpStatus.NOT_FOUND);
         writer.write(response);
     }
 

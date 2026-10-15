@@ -31,7 +31,7 @@ public class Router implements HttpHandler {
             return;
         }
 
-        var method = request.requestLine().method();
+        var method = request.method();
         if (!routes.get(target).containsKey(method)) {
             writeMethodNotAllowed(writer, request);
             return;
@@ -42,14 +42,14 @@ public class Router implements HttpHandler {
 
     private void writeNotFound(ResponseWriter writer, HttpRequest request) throws IOException {
         writer.write(new HttpResponse(
-                request.requestLine().version(),
+                request.version(),
                 HttpStatus.NOT_FOUND
         ));
     }
 
     private void writeMethodNotAllowed(ResponseWriter writer, HttpRequest request) throws IOException {
         writer.write(new HttpResponse(
-                request.requestLine().version(),
+                request.version(),
                 HttpStatus.METHOD_NOT_ALLOWED
         ));
     }
