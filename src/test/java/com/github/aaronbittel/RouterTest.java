@@ -2,6 +2,8 @@ package com.github.aaronbittel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -11,8 +13,11 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 public class RouterTest {
 
-    private static final HttpHandler NO_OP_HANDLER = (_, _) -> {};
     private static final HttpResponse OK_RESPONSE = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
+    private static final HttpResponse NOT_FOUND_RESPONSE = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
+
+    private static final HttpHandler NO_OP_HANDLER = (_, _) -> {};
+    private static final HttpHandler OK_RESPONSE_WRITER = (writer, _) -> writer.write(OK_RESPONSE);
     private HttpResponseRecorder recorder;
 
     @BeforeEach
@@ -105,7 +110,7 @@ public class RouterTest {
     void path_with_query_string_is_dispatched_to_the_handler() throws IOException {
         var path = "/route";
         var router = new Router()
-                .add(HttpMethod.GET, path, (writer, _) -> writer.write(OK_RESPONSE));
+                .add(HttpMethod.GET, path, OK_RESPONSE_WRITER);
 
         router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, path + "?query=value"));
         assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
@@ -116,5 +121,51 @@ public class RouterTest {
         assertThatIllegalArgumentException().isThrownBy(() -> new Router()
                 .add(HttpMethod.GET, "/hello-world", NO_OP_HANDLER)
                 .add(HttpMethod.GET, "/hello-world", NO_OP_HANDLER));
+    }
+
+    @Test
+    void route_without_trailing_slash_only_matches_exactly() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+
+        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static"));
+        assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
+    }
+
+    @Test
+    void route_does_not_exact_match_with_trailing_slash() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+
+        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static/"));
+        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
+    }
+
+    @Test
+    void prefix_route_does_not_match_path_without_trailing_slash() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static/", OK_RESPONSE_WRITER);
+
+        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static"));
+        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/static/docs", "/static/docs/directory"})
+    void route_with_trailing_slash_matches_prefix(String path) throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static/", OK_RESPONSE_WRITER);
+
+        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, path));
+        assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
+    }
+
+    @Test
+    void exact_route_does_not_match_nested_path() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+
+        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static/docs"));
+        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
     }
 }

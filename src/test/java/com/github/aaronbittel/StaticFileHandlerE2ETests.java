@@ -30,7 +30,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 @Timeout(value = 3, unit = TimeUnit.SECONDS)
-public class HttpServerE2ETest {
+public class StaticFileHandlerE2ETests {
+
+    @TempDir
+    private Path root;
 
     private static final HttpClient client = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
@@ -40,9 +43,6 @@ public class HttpServerE2ETest {
     private HttpServer server;
     private ExecutorService executor;
     private Future<?> serveFuture;
-
-    @TempDir
-    private Path root;
 
     @BeforeAll
     static void set_log_level_to_warning() {
@@ -58,7 +58,11 @@ public class HttpServerE2ETest {
                 root
         );
 
-        server = new HttpServer(config);
+        Router router = new Router()
+                .add(HttpMethod.GET, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"))
+                .add(HttpMethod.HEAD, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"));
+
+        server = new HttpServer(config, router);
         server.bind();
 
         executor = Executors.newSingleThreadExecutor();
@@ -93,14 +97,14 @@ public class HttpServerE2ETest {
         var fileContent = "index-file-content";
         Files.writeString(root.resolve("index.html"), fileContent);
 
-        var response = get("/");
+        var response = get("/static/");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo(fileContent);
     }
 
     @Test
     void get_returns_not_found_for_nonexistent_file() throws IOException, InterruptedException {
-        assertThat(get("/fielpath").statusCode()).isEqualTo(404);
+        assertThat(get("/filepath").statusCode()).isEqualTo(404);
     }
 
     @Test
@@ -108,7 +112,7 @@ public class HttpServerE2ETest {
         var fileContent = "index-file-content".getBytes(StandardCharsets.UTF_8);
         Files.write(root.resolve("index.html"), fileContent);
 
-        var response = head("/index.html");
+        var response = head("/static/index.html");
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Content-Type")).hasValue("text/html");
@@ -123,7 +127,7 @@ public class HttpServerE2ETest {
             names = {"GET", "HEAD"}
     )
     void unsupported_method_returns_method_not_allowed(HttpMethod method) throws IOException, InterruptedException {
-        assertThat(requestNoBody(method, "/index.html").statusCode())
+        assertThat(requestNoBody(method, "/static/index.html").statusCode())
                 .isEqualTo(HttpStatus.METHOD_NOT_ALLOWED.code());
     }
 
@@ -132,25 +136,25 @@ public class HttpServerE2ETest {
         Files.createDirectory(root.resolve("docs"));
         Files.createFile(root.resolve("root.bin"));
 
-        var response = get("/");
+        var response = get("/static/");
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertDirectoryEntry(response.body(), "/docs", "docs");
-        assertDirectoryEntry(response.body(), "/root.bin", "root.bin");
+        assertDirectoryEntry(response.body(), "docs/");
+        assertDirectoryEntry(response.body(), "root.bin");
     }
 
     @Test
     void get_to_subdirectory_returns_directory_listing() throws IOException, InterruptedException {
-        var directory = Files.createDirectory(root.resolve("docs"));
-        Files.createFile(directory.resolve("first.txt"));
-        Files.createFile(directory.resolve("second.txt"));
+        var docs = Files.createDirectory(root.resolve("docs"));
+        Files.createFile(docs.resolve("first.txt"));
+        Files.createFile(docs.resolve("second.txt"));
 
-        var response = get("/docs");
+        var response = get("/static/docs");
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertDirectoryEntry(response.body(), "/", "..");
-        assertDirectoryEntry(response.body(), "/docs/first.txt", "first.txt");
-        assertDirectoryEntry(response.body(), "/docs/second.txt", "second.txt");
+        assertDirectoryEntry(response.body(), "../");
+        assertDirectoryEntry(response.body(), "first.txt");
+        assertDirectoryEntry(response.body(), "second.txt");
     }
 
     private HttpResponse<String> get(String resource) throws IOException, InterruptedException {
@@ -183,9 +187,9 @@ public class HttpServerE2ETest {
                 .timeout(Duration.ofSeconds(1));
     }
 
-    private void assertDirectoryEntry(String html, String linkPath, String displayName) {
+    private void assertDirectoryEntry(String html, String displayName) {
         assertThat(html)
-                .contains("href=\"" + linkPath + "\"")
+                .contains("href=\"" + displayName + "\"")
                 .contains(">" + displayName + "</a>");
     }
 }

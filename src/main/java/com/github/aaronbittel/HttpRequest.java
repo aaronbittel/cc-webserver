@@ -17,6 +17,18 @@ public class HttpRequest {
         this.requestTarget = RequestTarget.parse(requestLine.requestTarget());
     }
 
+    public HttpRequest withRequestTarget(String requestTarget) {
+        return new HttpRequest(
+                new HttpRequestLine(
+                        requestLine.method(),
+                        requestTarget,
+                        requestLine().version()
+                ),
+                headers,
+                body
+        );
+    }
+
     public String path() {
         return requestTarget.path();
     }
@@ -27,6 +39,10 @@ public class HttpRequest {
 
     public HttpVersion version() {
         return requestLine.version();
+    }
+
+    public HttpRequestLine requestLine() {
+        return requestLine;
     }
 
     @Override

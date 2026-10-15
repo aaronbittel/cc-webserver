@@ -18,11 +18,11 @@ public class HttpServer implements AutoCloseable {
     private final ServerConfig config;
     private volatile ServerSocket serverSocket;
 
-    private final HttpHandler staticFileHandler;
+    private final Router router;
 
-    public HttpServer(ServerConfig config) {
+    public HttpServer(ServerConfig config, Router router) {
         this.config = config;
-        staticFileHandler = new StaticFileHandler(config.root());
+        this.router = router;
     }
 
     public void bind() throws IOException {
@@ -80,20 +80,9 @@ public class HttpServer implements AutoCloseable {
             return;
         }
 
-        log.info("request:" + request);
-        handleRequest(writer, request);
-    }
+        log.info("request:" + request.requestLine());
 
-    void handleRequest(ResponseWriter writer, HttpRequest request) throws IOException {
-        switch (request.method()) {
-            case HEAD, GET -> staticFileHandler.handleRequest(writer, request);
-            default -> handleUnsupportedMethod(writer, request);
-        }
-    }
-
-    void handleUnsupportedMethod(ResponseWriter writer, HttpRequest request) throws IOException {
-        var response = new HttpResponse(request.version(), HttpStatus.METHOD_NOT_ALLOWED);
-        writer.write(response);
+        router.handleRequest(writer, request);
     }
 
     public int port() {

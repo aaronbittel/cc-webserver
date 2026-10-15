@@ -22,12 +22,4 @@ public class TestUtilis {
                 new byte[0]
         );
     }
-
-    public static HttpRequest request(HttpMethod method, String requestString, HttpHeaders headers, byte[] body) {
-        return new HttpRequest(
-                new HttpRequestLine(method, requestString, HttpVersion.HTTP_1_1),
-                headers,
-                body
-        );
-    }
 }

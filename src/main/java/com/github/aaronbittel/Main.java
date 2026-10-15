@@ -26,7 +26,13 @@ public class Main {
 
         var config = new ServerConfig(address, port, root);
 
-        try (var server = new HttpServer(config)) {
+        var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(config.root()), "/static");
+
+        var router = new Router()
+                .add(HttpMethod.GET, "/static/", staticFileHandler)
+                .add(HttpMethod.HEAD, "/static/", staticFileHandler);
+
+        try (var server = new HttpServer(config, router)) {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 System.out.println("Shutting down server...");
                 try {

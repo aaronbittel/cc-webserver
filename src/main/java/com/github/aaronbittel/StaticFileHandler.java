@@ -30,7 +30,7 @@ public record StaticFileHandler(Path root) implements HttpHandler {
         switch (request.method()) {
             case GET -> handleGet(writer, request);
             case HEAD -> handleHead(writer, request);
-            default -> throw new IllegalStateException("must be GET or HEAD");
+            default -> throw new IllegalStateException("Must be GET or HEAD");
         }
     }
 
@@ -133,29 +133,28 @@ public record StaticFileHandler(Path root) implements HttpHandler {
         var entries = new StringBuilder();
 
         if (!directory.equals(root)) {
-            appendDirectoryEntryHtml(entries, toRootRelativeUrl(root, directory.getParent()), "..");
+            appendDirectoryEntryHtml(entries, "../");
         }
 
         try (var paths = Files.list(directory)) {
             for (Path path : paths.sorted().toList()) {
-                appendDirectoryEntryHtml(entries, toRootRelativeUrl(root, path), path.getFileName().toString());
+                appendDirectoryEntryHtml(entries, displayName(path));
             }
         }
 
         return entries.toString();
     }
 
-    private static String toRootRelativeUrl(Path root, Path path) {
-        return "/" + root.relativize(path)
-                .toString()
-                .replace(path.getFileSystem().getSeparator(), "/");
+    private static String displayName(Path path) {
+        String name = path.getFileName().toString();
+        return Files.isDirectory(path) ? name + "/" : name;
     }
 
-    private void appendDirectoryEntryHtml(StringBuilder html, String linkPath, String displayName) {
+    private void appendDirectoryEntryHtml(StringBuilder html, String path) {
         html.append("<li><a href=\"")
-                .append(linkPath)
+                .append(path)
                 .append("\">")
-                .append(displayName)
+                .append(path)
                 .append("</a></li>\n");
     }
 

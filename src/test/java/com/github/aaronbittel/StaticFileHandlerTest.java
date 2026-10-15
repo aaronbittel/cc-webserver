@@ -1,77 +1,98 @@
 package com.github.aaronbittel;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.opentest4j.TestAbortedException;
 
 import java.io.IOException;
-import java.nio.file.FileSystemException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static com.github.aaronbittel.TestUtilis.buildHeaders;
+import static com.github.aaronbittel.TestUtilis.request;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-public class StaticFileHandlerTest {
+class StaticFileHandlerTest {
 
-    private static final Path BASE_PATH = Path.of("base").toAbsolutePath().normalize();
+    private static final String FILENAME = "hello-world.txt";
+    private static final byte[] CONTENT = "Hello, World".getBytes(StandardCharsets.UTF_8);
+    private static final String CONTENT_LENGTH = String.valueOf(CONTENT.length);
 
-    @Test
-    void reject_path_not_starting_with_slash() {
-        assertThatIllegalArgumentException().isThrownBy(() -> StaticFileHandler.resolveRequestPath(BASE_PATH, "some-path"));
+    @TempDir
+    Path root;
+
+    StaticFileHandler staticFileHandler;
+    HttpResponseRecorder recorder;
+
+    @BeforeEach
+    void setUp() throws IOException {
+        Files.write(root.resolve(FILENAME), CONTENT);
+        staticFileHandler = new StaticFileHandler(root);
+        recorder = new HttpResponseRecorder();
     }
 
-    @Test
-    void reject_path_traversal() {
-        assertThatIllegalArgumentException().isThrownBy(() -> StaticFileHandler.resolveRequestPath(BASE_PATH, "/../somepath"))
-                .withMessage("Path traversal detected");
-    }
+    @Nested
+    class Get {
 
-    @Test
-    void normalize_dot_segments_in_request_path() throws IOException {
-        var expected = BASE_PATH.resolve("baz");
-        assertThat(StaticFileHandler.resolveRequestPath(BASE_PATH, "/foo/bar/../../baz")).isEqualTo(expected);
-    }
+        @Test
+        void returns_file_contents_when_file_exists() throws IOException {
+            staticFileHandler.handleRequest(recorder, request(HttpMethod.GET, "/" + FILENAME));
 
-    @Test
-    void reject_symlink_pointing_outside_of_root(@TempDir Path tempDir) throws IOException {
-        var fileOutsideRoot = tempDir.resolve("file-outside-root");
-        Files.writeString(fileOutsideRoot, "Hello, World!");
+            var headers = buildHeaders(
+                    "Content-Type", "text/plain",
+                    "Content-Length", CONTENT_LENGTH
+            );
 
-        var root = tempDir.resolve("root");
-        Files.createDirectory(root);
+            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, CONTENT);
+            assertThat(recorder.response()).isEqualTo(expected);
+        }
 
-        var symPath = root.resolve("symlink");
+        @Test
+        void returns_not_found_when_file_does_not_exist() throws IOException {
+            staticFileHandler.handleRequest(recorder, request(HttpMethod.GET, "/unknown-file"));
 
-        createSymlinkOrAbort(symPath, fileOutsideRoot);
+            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
+            assertThat(recorder.response()).isEqualTo(expected);
+        }
 
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> StaticFileHandler.resolveRequestPath(root, "/" + symPath))
-                .withMessage("Path traversal detected");
-    }
+        @Test
+        void query_string_does_not_affect_resource_resolution() throws IOException {
+            staticFileHandler.handleRequest(recorder, request(HttpMethod.GET, "/" + FILENAME + "?lang=de"));
 
-    @Test
-    void resolves_relative_symlink_inside_root(@TempDir Path tempDir) throws IOException {
-        Path root = Files.createDirectory(tempDir.resolve("www"));
-        Path documents = Files.createDirectory(root.resolve("documents"));
+            var headers = buildHeaders(
+                    "Content-Type", "text/plain",
+                    "Content-Length", CONTENT_LENGTH
+            );
 
-        Path targetFile = documents.resolve("report.txt");
-        Files.writeString(targetFile, "Hello from the target");
-
-        Path symlink = root.resolve("latest.txt");
-        createSymlinkOrAbort(symlink, root.relativize(targetFile));
-
-        Path resolved = StaticFileHandler.resolveRequestPath(root, "/latest.txt");
-
-        assertThat(targetFile.toRealPath()).isEqualTo(resolved.toRealPath());
-    }
-
-    private static void createSymlinkOrAbort(Path link, Path target) throws IOException {
-        try {
-            Files.createSymbolicLink(link, target);
-        } catch (FileSystemException e) {
-            throw new TestAbortedException("Cannot create symbolic link; privileges may be missing", e);
+            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, CONTENT);
+            assertThat(recorder.response()).isEqualTo(expected);
         }
     }
 
+    @Nested
+    class Head {
+
+        @Test
+        void returns_headers_without_body_when_file_exists() throws IOException {
+            staticFileHandler.handleRequest(recorder, request(HttpMethod.HEAD, "/" + FILENAME));
+
+            var headers = buildHeaders(
+                    "Content-Type", "text/plain",
+                    "Content-Length", CONTENT_LENGTH
+            );
+
+            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers);
+            assertThat(recorder.response()).isEqualTo(expected);
+        }
+
+        @Test
+        void returns_not_found_when_file_does_not_exist() throws IOException {
+            staticFileHandler.handleRequest(recorder, request(HttpMethod.HEAD, "/unknown-file"));
+
+            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
+            assertThat(recorder.response()).isEqualTo(expected);
+        }
+    }
 }

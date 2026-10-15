@@ -1,13 +1,11 @@
 package com.github.aaronbittel;
 
-import java.io.IOException;
-
 public class HttpResponseRecorder implements ResponseWriter {
 
     private HttpResponse response;
 
     @Override
-    public void write(HttpResponse response) throws IOException {
+    public void write(HttpResponse response) {
         this.response = response;
     }
 

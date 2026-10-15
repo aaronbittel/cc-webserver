@@ -37,10 +37,6 @@ public class RequestTarget {
         return path;
     }
 
-    public String rawTarget() {
-        return rawTarget;
-    }
-
     public String query() {
         return query;
     }
