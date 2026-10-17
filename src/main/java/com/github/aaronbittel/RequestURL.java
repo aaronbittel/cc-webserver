@@ -1,20 +1,22 @@
 package com.github.aaronbittel;
 
-public class RequestTarget {
+public class RequestURL {
 
-    private final String rawTarget;
     private final String path;
     private final String query;
     private final boolean hasQuery;
 
-    private RequestTarget(String rawTarget, String path, String query, boolean hasQuery) {
-        this.rawTarget = rawTarget;
+    private RequestURL(String path, String query, boolean hasQuery) {
         this.path = path;
         this.query = query;
         this.hasQuery = hasQuery;
     }
 
-    public static RequestTarget parse(String rawTarget) {
+    public RequestURL withPath(String newPath) {
+        return new RequestURL(newPath, query, hasQuery);
+    }
+
+    public static RequestURL parse(String rawTarget) {
         if (!rawTarget.startsWith("/")) {
             throw new IllegalArgumentException("Request target must start with '/'");
         }
@@ -22,11 +24,10 @@ public class RequestTarget {
         int queryIndex = rawTarget.indexOf('?');
 
         if (queryIndex == -1) {
-            return new RequestTarget(rawTarget, rawTarget, "", false);
+            return new RequestURL(rawTarget, "", false);
         }
 
-        return new RequestTarget(
-                rawTarget,
+        return new RequestURL(
                 rawTarget.substring(0, queryIndex),
                 rawTarget.substring(queryIndex + 1),
                 true

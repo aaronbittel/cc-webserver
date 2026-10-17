@@ -32,13 +32,13 @@ public class RouterTest {
         var response = new HttpResponse(
                 HttpVersion.HTTP_1_1,
                 HttpStatus.OK,
-                TestUtilis.buildHeaders("Key", "Value"),
+                TestUtils.buildHeaders("Key", "Value"),
                 "content".getBytes(StandardCharsets.UTF_8)
         );
         var router = new Router()
                 .add(HttpMethod.GET, path, (writer, _) -> writer.write(response));
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, path));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path));
 
         assertThat(recorder.response()).isEqualTo(response);
     }
@@ -46,7 +46,7 @@ public class RouterTest {
     @Test
     void returns_not_found_when_path_is_not_registered() throws IOException {
         var router = new Router();
-        var request = TestUtilis.request(HttpMethod.GET, "/path-not-registered");
+        var request = TestUtils.request(HttpMethod.GET, "/path-not-registered");
         router.handleRequest(recorder, request);
 
         var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
@@ -60,7 +60,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, path, NO_OP_HANDLER);
 
-        var request = TestUtilis.request(HttpMethod.POST, path);
+        var request = TestUtils.request(HttpMethod.POST, path);
         router.handleRequest(recorder, request);
 
         var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.METHOD_NOT_ALLOWED);
@@ -77,10 +77,10 @@ public class RouterTest {
                 .add(HttpMethod.GET, path, (writer, _) -> writer.write(getResponse))
                 .add(HttpMethod.POST, path, (writer, _) -> writer.write(postResponse));
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, path));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path));
         assertThat(recorder.response()).isEqualTo(getResponse);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.POST, path));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.POST, path));
         assertThat(recorder.response()).isEqualTo(postResponse);
     }
 
@@ -93,10 +93,10 @@ public class RouterTest {
                 .add(HttpMethod.GET, "/first", (writer, _) -> writer.write(firstResponse))
                 .add(HttpMethod.GET, "/second", (writer, _) -> writer.write(secondResponse));
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/first"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/first"));
         assertThat(recorder.response()).isEqualTo(firstResponse);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/second"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/second"));
         assertThat(recorder.response()).isEqualTo(secondResponse);
     }
 
@@ -113,7 +113,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, path, OK_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, path + "?query=value"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path + "?query=value"));
         assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
     }
 
@@ -129,7 +129,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static"));
         assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
     }
 
@@ -138,7 +138,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static/"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static/"));
         assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
     }
 
@@ -147,7 +147,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, "/static/", OK_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static"));
         assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
     }
 
@@ -157,7 +157,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, "/static/", OK_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, path));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path));
         assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
     }
 
@@ -166,7 +166,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.GET, "/static/docs"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static/docs"));
         assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
     }
 
@@ -175,7 +175,7 @@ public class RouterTest {
         var router = new Router()
                 .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.HEAD, "/static"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.HEAD, "/static"));
         assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
     }
 
@@ -185,7 +185,7 @@ public class RouterTest {
                 .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER)
                 .add(HttpMethod.HEAD, "/static", NOT_FOUND_RESPONSE_WRITER);
 
-        router.handleRequest(recorder, TestUtilis.request(HttpMethod.HEAD, "/static"));
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.HEAD, "/static"));
         assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
     }
 }

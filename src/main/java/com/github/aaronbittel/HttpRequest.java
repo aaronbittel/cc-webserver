@@ -8,29 +8,28 @@ public class HttpRequest {
     private final HttpRequestLine requestLine;
     private final HttpHeaders headers;
     private final byte[] body;
-    private final RequestTarget requestTarget;
+    private final RequestURL requestUrl;
 
     public HttpRequest(HttpRequestLine requestLine, HttpHeaders headers, byte[] body) {
         this.requestLine = requestLine;
         this.headers = headers;
         this.body = body;
-        this.requestTarget = RequestTarget.parse(requestLine.requestTarget());
+        this.requestUrl = RequestURL.parse(requestLine.requestTarget());
     }
 
-    public HttpRequest withRequestTarget(String requestTarget) {
-        return new HttpRequest(
-                new HttpRequestLine(
-                        requestLine.method(),
-                        requestTarget,
-                        requestLine().version()
-                ),
-                headers,
-                body
-        );
+    private HttpRequest(HttpRequestLine requestLine, HttpHeaders headers, byte[] body, RequestURL requestUrl) {
+        this.requestLine = requestLine;
+        this.headers = headers;
+        this.body = body;
+        this.requestUrl = requestUrl;
+    }
+
+    public HttpRequest withURL(RequestURL newUrl) {
+        return new HttpRequest(requestLine, headers, body, newUrl);
     }
 
     public String path() {
-        return requestTarget.path();
+        return requestUrl.path();
     }
 
     public HttpMethod method() {
@@ -43,6 +42,10 @@ public class HttpRequest {
 
     public HttpRequestLine requestLine() {
         return requestLine;
+    }
+
+    public RequestURL requestUrl() {
+        return requestUrl;
     }
 
     @Override

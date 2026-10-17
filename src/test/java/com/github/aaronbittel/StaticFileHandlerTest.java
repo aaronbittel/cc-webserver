@@ -10,8 +10,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static com.github.aaronbittel.TestUtilis.buildHeaders;
-import static com.github.aaronbittel.TestUtilis.request;
+import static com.github.aaronbittel.TestUtils.buildHeaders;
+import static com.github.aaronbittel.TestUtils.request;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StaticFileHandlerTest {
