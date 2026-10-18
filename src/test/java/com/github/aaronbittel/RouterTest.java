@@ -6,115 +6,115 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 public class RouterTest {
 
-    private static final HttpResponse OK_RESPONSE = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
-    private static final HttpResponse NOT_FOUND_RESPONSE = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
-
     private static final HttpHandler NO_OP_HANDLER = (_, _) -> {};
-    private static final HttpHandler OK_RESPONSE_WRITER = (writer, _) -> writer.write(OK_RESPONSE);
-    private static final HttpHandler NOT_FOUND_RESPONSE_WRITER = (writer, _) -> writer.write(NOT_FOUND_RESPONSE);
+
+    private TestUtils.RecordingHandler recordingHandler;
     private HttpResponseRecorder recorder;
 
     @BeforeEach
     void setUp() {
+        recordingHandler = new TestUtils.RecordingHandler();
         recorder = new HttpResponseRecorder();
     }
 
     @Test
     void dispatches_to_handler_when_method_and_path_match() throws IOException {
         var path = "/hello-world";
-        var response = new HttpResponse(
-                HttpVersion.HTTP_1_1,
-                HttpStatus.OK,
-                TestUtils.buildHeaders("Key", "Value"),
-                "content".getBytes(StandardCharsets.UTF_8)
-        );
         var router = new Router()
-                .add(HttpMethod.GET, path, (writer, _) -> writer.write(response));
+                .add(HttpMethod.GET, path, recordingHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path));
-
-        assertThat(recorder.response()).isEqualTo(response);
+        assertThat(recordingHandler.wasCalled()).isTrue();
     }
 
     @Test
-    void returns_not_found_when_path_is_not_registered() throws IOException {
+    void returns_not_found_when_no_route_matches_path() throws IOException {
         var router = new Router();
         var request = TestUtils.request(HttpMethod.GET, "/path-not-registered");
-        router.handleRequest(recorder, request);
 
-        var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
-        assertThat(recorder.response()).isEqualTo(expected);
+        router.handleRequest(recorder, request);
+        TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
     }
 
     @Test
-    void returns_method_not_allowed_when_method_is_not_registered_for_path() throws IOException {
+    void returns_method_not_allowed_when_path_matches_but_method_does_not() throws IOException {
         var path = "/path";
 
         var router = new Router()
                 .add(HttpMethod.GET, path, NO_OP_HANDLER);
 
         var request = TestUtils.request(HttpMethod.POST, path);
-        router.handleRequest(recorder, request);
 
-        var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.METHOD_NOT_ALLOWED);
-        assertThat(recorder.response()).isEqualTo(expected);
+        router.handleRequest(recorder, request);
+        TestUtils.assertStatus(recorder, HttpStatus.METHOD_NOT_ALLOWED);
     }
 
     @Test
-    void routes_requests_to_the_handler_matching_the_method() throws IOException {
-        var getResponse = OK_RESPONSE;
-        var postResponse = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.CREATED);
+    void dispatches_to_handler_matching_request_method() throws IOException {
+        var getHandler = new TestUtils.RecordingHandler();
+        var postHandler = new TestUtils.RecordingHandler();
 
         var path = "/path";
         var router = new Router()
-                .add(HttpMethod.GET, path, (writer, _) -> writer.write(getResponse))
-                .add(HttpMethod.POST, path, (writer, _) -> writer.write(postResponse));
+                .add(HttpMethod.GET, path, getHandler)
+                .add(HttpMethod.POST, path, postHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path));
-        assertThat(recorder.response()).isEqualTo(getResponse);
+
+        assertThat(getHandler.wasCalled()).isTrue();
+        assertThat(postHandler.wasCalled()).isFalse();
+
+        getHandler.reset();
+        postHandler.reset();
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.POST, path));
-        assertThat(recorder.response()).isEqualTo(postResponse);
+
+        assertThat(getHandler.wasCalled()).isFalse();
+        assertThat(postHandler.wasCalled()).isTrue();
     }
 
     @Test
-    void routes_requests_to_the_handler_matching_the_path() throws IOException {
-        var firstResponse = OK_RESPONSE;
-        var secondResponse = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.CREATED);
+    void dispatches_to_handler_matching_request_path() throws IOException {
+        var firstHandler = new TestUtils.RecordingHandler();
+        var secondHandler = new TestUtils.RecordingHandler();
 
         var router = new Router()
-                .add(HttpMethod.GET, "/first", (writer, _) -> writer.write(firstResponse))
-                .add(HttpMethod.GET, "/second", (writer, _) -> writer.write(secondResponse));
+                .add(HttpMethod.GET, "/first", firstHandler)
+                .add(HttpMethod.GET, "/second", secondHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/first"));
-        assertThat(recorder.response()).isEqualTo(firstResponse);
+        TestUtils.assertWasCalled(firstHandler);
+        TestUtils.assertWasNotCalled(secondHandler);
+
+        firstHandler.reset();
+        secondHandler.reset();
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/second"));
-        assertThat(recorder.response()).isEqualTo(secondResponse);
+        TestUtils.assertWasNotCalled(firstHandler);
+        TestUtils.assertWasCalled(secondHandler);
     }
 
     @Test
-    void rejects_route_path_without_leading_slash() {
+    void rejects_route_registration_without_leading_slash() {
         assertThatIllegalArgumentException().isThrownBy(() ->
-                new Router().add(HttpMethod.GET, "route-with-slash", NO_OP_HANDLER)
+                new Router().add(HttpMethod.GET, "route-without-slash", NO_OP_HANDLER)
         );
     }
 
     @Test
-    void path_with_query_string_is_dispatched_to_the_handler() throws IOException {
+    void matches_route_when_request_path_contains_query_string() throws IOException {
         var path = "/route";
         var router = new Router()
-                .add(HttpMethod.GET, path, OK_RESPONSE_WRITER);
+                .add(HttpMethod.GET, path, recordingHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path + "?query=value"));
-        assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
+        TestUtils.assertWasCalled(recordingHandler);
     }
 
     @Test
@@ -125,67 +125,121 @@ public class RouterTest {
     }
 
     @Test
-    void route_without_trailing_slash_only_matches_exactly() throws IOException {
+    void matches_non_subtree_route_only_exactly() throws IOException {
         var router = new Router()
-                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+                .add(HttpMethod.GET, "/static", recordingHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static"));
-        assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
+        TestUtils.assertWasCalled(recordingHandler);
     }
 
     @Test
-    void route_does_not_exact_match_with_trailing_slash() throws IOException {
+    void does_not_match_non_subtree_route_with_trailing_slash() throws IOException {
         var router = new Router()
-                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+                .add(HttpMethod.GET, "/static", NO_OP_HANDLER);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static/"));
-        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
+        TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
     }
 
     @Test
-    void prefix_route_does_not_match_path_without_trailing_slash() throws IOException {
+    void redirects_to_trailing_slash_when_matching_subtree_route_exists() throws IOException {
         var router = new Router()
-                .add(HttpMethod.GET, "/static/", OK_RESPONSE_WRITER);
+                .add(HttpMethod.GET, "/static/", NO_OP_HANDLER);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static"));
-        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
+        TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+        assertThat(recorder.response().headers().get("Location")).hasValue("/static/");
+    }
+
+    @Test
+    void matches_subtree_route_at_base_path_with_trailing_slash() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static/", recordingHandler);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static/"));
+        TestUtils.assertWasCalled(recordingHandler);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"/static/docs", "/static/docs/directory"})
-    void route_with_trailing_slash_matches_prefix(String path) throws IOException {
+    void matches_nested_paths_for_subtree_route(String path) throws IOException {
         var router = new Router()
-                .add(HttpMethod.GET, "/static/", OK_RESPONSE_WRITER);
+                .add(HttpMethod.GET, "/static/", recordingHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path));
-        assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
+        TestUtils.assertWasCalled(recordingHandler);
     }
 
     @Test
-    void exact_route_does_not_match_nested_path() throws IOException {
+    void does_not_match_nested_path_for_non_subtree_route() throws IOException {
         var router = new Router()
-                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+                .add(HttpMethod.GET, "/static", recordingHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static/docs"));
-        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
+        TestUtils.assertWasNotCalled(recordingHandler);
     }
 
     @Test
     void falls_back_to_get_route_when_head_route_is_not_defined() throws IOException {
         var router = new Router()
-                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER);
+                .add(HttpMethod.GET, "/static", recordingHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.HEAD, "/static"));
-        assertThat(recorder.response()).isEqualTo(OK_RESPONSE);
+        TestUtils.assertWasCalled(recordingHandler);
+    }
+
+    @Test
+    void prefers_explicit_route_over_subtree_route() throws IOException {
+        var exactHandler = new TestUtils.RecordingHandler();
+        var subtreeHandler = new TestUtils.RecordingHandler();
+
+        var router = new Router()
+                .add(HttpMethod.GET, "/static", exactHandler)
+                .add(HttpMethod.GET, "/static/", subtreeHandler);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static"));
+        TestUtils.assertWasCalled(exactHandler);
+        TestUtils.assertWasNotCalled(subtreeHandler);
+    }
+
+    @Test
+    void prefers_subtree_route_when_request_path_has_trailing_slash() throws IOException {
+        var exactHandler = new TestUtils.RecordingHandler();
+        var subtreeHandler = new TestUtils.RecordingHandler();
+
+        var router = new Router()
+                .add(HttpMethod.GET, "/static", exactHandler)
+                .add(HttpMethod.GET, "/static/", subtreeHandler);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.HEAD, "/static/"));
+        TestUtils.assertWasCalled(subtreeHandler);
+        TestUtils.assertWasNotCalled(exactHandler);
     }
 
     @Test
     void prefers_explicit_head_route_over_get_route() throws IOException {
+        var getHandler = new TestUtils.RecordingHandler();
+        var headHandler = new TestUtils.RecordingHandler();
+
         var router = new Router()
-                .add(HttpMethod.GET, "/static", OK_RESPONSE_WRITER)
-                .add(HttpMethod.HEAD, "/static", NOT_FOUND_RESPONSE_WRITER);
+                .add(HttpMethod.GET, "/static", getHandler)
+                .add(HttpMethod.HEAD, "/static", headHandler);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.HEAD, "/static"));
-        assertThat(recorder.response()).isEqualTo(NOT_FOUND_RESPONSE);
+        TestUtils.assertWasCalled(headHandler);
+        TestUtils.assertWasNotCalled(getHandler);
+    }
+
+    @Test
+    void does_not_match_paths_sharing_only_subtree_prefix()
+            throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static/", recordingHandler);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/staticity"));
+
+        TestUtils.assertWasNotCalled(recordingHandler);
+        TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
     }
 }

@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StripPrefixHandlerTest {
 
     HttpResponseRecorder recorder;
-    RecordingHandler recordingHandler;
+    TestUtils.RecordingHandler recordingHandler;
 
     static Stream<String> prefixes() {
         return Stream.of("/prefix", "/prefix/");
@@ -22,7 +22,7 @@ class StripPrefixHandlerTest {
     @BeforeEach
     void setUp() {
         recorder = new HttpResponseRecorder();
-        recordingHandler = new RecordingHandler();
+        recordingHandler = new TestUtils.RecordingHandler();
     }
 
     @ParameterizedTest
@@ -32,7 +32,7 @@ class StripPrefixHandlerTest {
         var handler = new StripPrefixHandler(next, prefix);
 
         handler.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/"));
-        TestUtils.assertNotFound(recorder);
+        TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
     }
 
     @ParameterizedTest
@@ -43,7 +43,7 @@ class StripPrefixHandlerTest {
         var handler = new StripPrefixHandler(recordingHandler, prefix);
 
         handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, req);
-        assertThat(recordingHandler.received()).isNotNull();
+        assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/path");
     }
 
@@ -53,7 +53,7 @@ class StripPrefixHandlerTest {
         var handler = new StripPrefixHandler(next, "/prefix");
 
         handler.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/prefix-not"));
-        TestUtils.assertNotFound(recorder);
+        TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
     }
 
     @Test
@@ -61,7 +61,7 @@ class StripPrefixHandlerTest {
         var handler = new StripPrefixHandler(new StripPrefixHandler(recordingHandler, "/v1"), "/api");
         handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, TestUtils.request(HttpMethod.GET, "/api/v1/users"));
 
-        assertThat(recordingHandler.received()).isNotNull();
+        assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/users");
     }
 
@@ -71,7 +71,7 @@ class StripPrefixHandlerTest {
         var handler = new StripPrefixHandler(recordingHandler, prefix);
         handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, TestUtils.request(HttpMethod.GET, prefix));
 
-        assertThat(recordingHandler.received()).isNotNull();
+        assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/");
     }
 
@@ -84,7 +84,7 @@ class StripPrefixHandlerTest {
 
         handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, request);
 
-        assertThat(recordingHandler.received()).isNotNull();
+        assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/users");
         assertThat(recordingHandler.received().requestUrl().query()).isEqualTo("active=true");
         assertThat(recordingHandler.received().requestUrl().hasQuery()).isTrue();
@@ -97,22 +97,9 @@ class StripPrefixHandlerTest {
 
         handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, request);
 
-        assertThat(recordingHandler.received()).isNotNull();
+        assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/users");
         assertThat(recordingHandler.received().requestUrl().query()).isEmpty();
         assertThat(recordingHandler.received().requestUrl().hasQuery()).isTrue();
-    }
-
-    static class RecordingHandler implements HttpHandler {
-        private HttpRequest received;
-
-        @Override
-        public void handleRequest(ResponseWriter writer, HttpRequest request) {
-            received = request;
-        }
-
-        public HttpRequest received() {
-            return received;
-        }
     }
 }
