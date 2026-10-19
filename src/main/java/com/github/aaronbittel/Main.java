@@ -31,18 +31,56 @@ public class Main {
 
         var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(config.root()), "/static");
 
+        var usersRouter = new Router()
+                .add(HttpMethod.GET, "/", (writer, request) -> {
+                    var body = "Users home".getBytes(StandardCharsets.UTF_8);
+                    writer.write(new HttpResponse(
+                            request.version(),
+                            HttpStatus.OK,
+                            new HttpHeaders()
+                                    .add("Content-Type", "text/plain")
+                                    .add("Content-Length", String.valueOf(body.length)),
+                            body
+                    ));
+                })
+                .add(HttpMethod.GET, "/profile", (writer, request) -> {
+                    var body = "User profile".getBytes(StandardCharsets.UTF_8);
+                    writer.write(new HttpResponse(
+                            request.version(),
+                            HttpStatus.OK,
+                            new HttpHeaders()
+                                    .add("Content-Type", "text/plain")
+                                    .add("Content-Length", String.valueOf(body.length)),
+                            body
+                    ));
+                });
+
         var router = new Router()
+                .add(HttpMethod.GET, "/", (writer, request) -> {
+                    var body = "Hello, World!".getBytes(StandardCharsets.UTF_8);
+                    writer.write(new HttpResponse(
+                            request.version(),
+                            HttpStatus.OK,
+                            new HttpHeaders()
+                                    .add("Content-Type", "text/plain")
+                                    .add("Content-Length", String.valueOf(body.length)),
+                            body
+                    ));
+                })
                 .add(HttpMethod.GET, "/static/", staticFileHandler)
                 .add(HttpMethod.GET, "/time", (writer, request) -> {
                     var now = LocalDateTime.now()
                             .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
 
-                    var body = now.getBytes(StandardCharsets.UTF_8);
+                    var body = ("{\"time\":\"" + now + "\"}").getBytes(StandardCharsets.UTF_8);
+
                     var headers = new HttpHeaders()
-                            .add("Content-Length", String.valueOf(body.length))
-                            .add("Content-Type", "text/plain");
+                            .add("Content-Type", "application/json")
+                            .add("Content-Length", String.valueOf(body.length));
+
                     writer.write(new HttpResponse(request.version(), HttpStatus.OK, headers, body));
-                });
+                })
+                .mount("/users", usersRouter);
 
         try (var server = new HttpServer(config, router)) {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
