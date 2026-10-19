@@ -137,12 +137,59 @@ public class Router implements HttpHandler {
             return result.orElseThrow();
         }
 
-        var subtreeMatch = findLongestMatchingSubtreeRoute(request.path());
-        if (subtreeMatch.isPresent()) {
-            return resolveMatchedRoute(subtreeMatch.orElseThrow().methods(), request);
+        result = lookupLongestPrefixRoute(request);
+        if (result.isPresent()) {
+            return result.orElseThrow();
         }
 
         return new RoutingResult.NotFound();
+    }
+
+    private Optional<RoutingResult> lookupLongestPrefixRoute(HttpRequest request) {
+        var subtreeMatch = findLongestMatchingSubtreeRoute(request.path());
+        var mountMatch = findLongestMatchingMountRoute(request.path());
+
+        if (subtreeMatch.isPresent() && mountMatch.isPresent()) {
+            var sm = subtreeMatch.orElseThrow();
+            var mm = mountMatch.orElseThrow();
+            if (sm.prefix().length() > mm.prefix().length()) {
+                return Optional.of(resolveMatchedRoute(sm.methods(), request));
+            }
+            return Optional.of(new RoutingResult.Dispatch(mm.handler()));
+        } else if (subtreeMatch.isPresent()) {
+            var sm = subtreeMatch.orElseThrow();
+            return Optional.of(resolveMatchedRoute(sm.methods(), request));
+        } else if (mountMatch.isPresent()) {
+            var mm = mountMatch.orElseThrow();
+            return Optional.of(new RoutingResult.Dispatch(mm.handler()));
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<String> findLongestMatchingPrefix(String path, Set<String> prefixes) {
+        String longestMatch = null;
+
+        for (var prefix : prefixes) {
+            if (!path.startsWith(prefix)) {
+                continue;
+            }
+            if (longestMatch == null || prefix.length() > longestMatch.length()) {
+                longestMatch = prefix;
+            }
+        }
+
+        return Optional.ofNullable(longestMatch);
+    }
+
+    private Optional<SubtreeMatch> findLongestMatchingSubtreeRoute(String path) {
+        return findLongestMatchingPrefix(path, subtreeRoutes.keySet())
+                .map(prefix -> new SubtreeMatch(prefix, subtreeRoutes.get(prefix)));
+    }
+
+    private Optional<MountMatch> findLongestMatchingMountRoute(String path) {
+        return findLongestMatchingPrefix(path, mountRoutes.keySet())
+                .map(prefix -> new MountMatch(prefix, mountRoutes.get(prefix)));
     }
 
     /**
@@ -238,37 +285,9 @@ public class Router implements HttpHandler {
         return Optional.ofNullable(exactRoutes.get(path));
     }
 
-    /**
-     * Finds the most specific registered subtree route matching the specified path.
-     *
-     * <p>A subtree route matches when the request path starts with its registered prefix. Because registered subtree
-     * prefixes end with {@code /}, matching respects path-segment boundaries. If multiple subtree routes match, the
-     * longest registered prefix is selected.
-     *
-     * <p>This method matches by path only and does not consider HTTP methods.
-     *
-     * @param path the request path to match
-     * @return the method-to-handler mapping for the longest matching subtree route, or empty if no route matches
-     */
-    private Optional<SubtreeMatch> findLongestMatchingSubtreeRoute(String path) {
-        String longestMatchingPrefix = null;
-
-        for (var entry : subtreeRoutes.entrySet()) {
-            var prefix = entry.getKey();
-            if (!path.startsWith(prefix)) {
-                continue;
-            }
-            if (longestMatchingPrefix == null || prefix.length() > longestMatchingPrefix.length()) {
-                longestMatchingPrefix = prefix;
-            }
-        }
-
-        return longestMatchingPrefix == null
-                ? Optional.empty()
-                : Optional.of(new SubtreeMatch(longestMatchingPrefix, subtreeRoutes.get(longestMatchingPrefix)));
-    }
-
     private record SubtreeMatch(String prefix, Map<HttpMethod, HttpHandler> methods) {}
+
+    private record MountMatch(String prefix, HttpHandler handler) {}
 
     /**
      * Returns the methods allowed by a matched route.

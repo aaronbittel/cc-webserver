@@ -299,4 +299,60 @@ public class RouterTest {
                         .mount("/path/", new Router())
                         .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER));
     }
+
+    @Test
+    void mount_route_forwards_request_with_prefix_stripped() throws IOException {
+        var handler = new TestUtils.RecordingHandler();
+        var router = new Router()
+                .mount("/users", new Router().add(HttpMethod.GET, "/", handler));
+
+        var request = TestUtils.request(HttpMethod.GET, "/users/");
+
+        router.handleRequest(recorder, request);
+        TestUtils.assertWasCalled(handler);
+        assertThat(handler.received().path()).isEqualTo("/");
+    }
+
+    @Test
+    void mount_route_takes_longest_prefix() throws IOException {
+        var nonMatchingHandler = new TestUtils.RecordingHandler();
+        var matchingHandler = new TestUtils.RecordingHandler();
+
+        var router = new Router()
+                .mount("/users", new Router().add(HttpMethod.GET, "/", nonMatchingHandler))
+                .mount("/users/docs", new Router().add(HttpMethod.GET, "/guide/", matchingHandler));
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/users/docs/guide/"));
+
+        TestUtils.assertWasCalled(matchingHandler);
+        TestUtils.assertWasNotCalled(nonMatchingHandler);
+    }
+
+    @Test
+    void longest_subtree_prefix_takes_precedence_over_mount() throws IOException {
+        var nonMatchingHandler = new TestUtils.RecordingHandler();
+        var matchingHandler = new TestUtils.RecordingHandler();
+
+        var router = new Router()
+                .mount("/users", new Router().add(HttpMethod.GET, "/", nonMatchingHandler))
+                .add(HttpMethod.GET, "/users/docs/", matchingHandler);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/users/docs/"));
+        TestUtils.assertWasCalled(matchingHandler);
+        TestUtils.assertWasNotCalled(nonMatchingHandler);
+    }
+
+    @Test
+    void longest_mount_prefix_takes_precedence_over_subtree() throws IOException {
+        var nonMatchingHandler = new TestUtils.RecordingHandler();
+        var matchingHandler = new TestUtils.RecordingHandler();
+
+        var router = new Router()
+                .mount("/users/docs", new Router().add(HttpMethod.GET, "/", matchingHandler))
+                .add(HttpMethod.GET, "/users/", nonMatchingHandler);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/users/docs/"));
+        TestUtils.assertWasCalled(matchingHandler);
+        TestUtils.assertWasNotCalled(nonMatchingHandler);
+    }
 }
