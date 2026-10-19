@@ -42,12 +42,10 @@ public class RouterTest {
 
     @Test
     void returns_method_not_allowed_when_path_matches_but_method_does_not() throws IOException {
-        var path = "/path";
-
         var router = new Router()
-                .add(HttpMethod.GET, path, TestUtils.NO_OP_HANDLER);
+                .add(HttpMethod.GET, "/path", TestUtils.NO_OP_HANDLER);
 
-        var request = TestUtils.request(HttpMethod.POST, path);
+        var request = TestUtils.request(HttpMethod.POST, "/path");
 
         router.handleRequest(recorder, request);
         TestUtils.assertStatus(recorder, HttpStatus.METHOD_NOT_ALLOWED);
@@ -354,5 +352,15 @@ public class RouterTest {
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/users/docs/"));
         TestUtils.assertWasCalled(matchingHandler);
         TestUtils.assertWasNotCalled(nonMatchingHandler);
+    }
+
+    @Test
+    void mount_route_redirects_to_trailing_slash() throws IOException {
+        var router = new Router()
+                .mount("/users", new Router().add(HttpMethod.GET, "/", TestUtils.NO_OP_HANDLER));
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/users"));
+        TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+        assertThat(recorder.response().headers().get("Location")).hasValue("/users/");
     }
 }

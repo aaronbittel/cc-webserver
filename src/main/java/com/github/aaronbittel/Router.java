@@ -82,7 +82,7 @@ public class Router implements HttpHandler {
 
         var routes = path.endsWith("/") ? subtreeRoutes : exactRoutes;
 
-        if (duplicatedRoute(mountRoutes.keySet(), path)) {
+        if (path.endsWith("/") && duplicatedRoute(mountRoutes.keySet(), path)) {
             throw new IllegalArgumentException("Duplicated path: " + path);
         }
 
@@ -246,11 +246,11 @@ public class Router implements HttpHandler {
 
         var canonicalPath = path + "/";
 
-        if (!subtreeRoutes.containsKey(canonicalPath)) {
-            return Optional.empty();
+        if (subtreeRoutes.containsKey(canonicalPath) || mountRoutes.containsKey(canonicalPath)) {
+            return Optional.of(new RoutingResult.Redirect(canonicalPath));
         }
 
-        return Optional.of(new RoutingResult.Redirect(canonicalPath));
+        return Optional.empty();
     }
 
     /**
