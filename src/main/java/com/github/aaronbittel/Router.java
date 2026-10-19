@@ -6,7 +6,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * An HTTP router that dispatches requests to handlers registered for exact paths or subtree paths.
@@ -52,9 +51,10 @@ public class Router implements HttpHandler {
         switch (resolveRequest(request)) {
             case RoutingResult.Dispatch(var handler) -> handler.handleRequest(writer, request);
             case RoutingResult.MethodNotAllowed(var allowedMethods) ->
-                    writeMethodNotAllowed(writer, request, allowedMethods);
-            case RoutingResult.NotFound() -> writeNotFound(writer, request);
-            case RoutingResult.Redirect(var location) -> writeRedirect(writer, request, location);
+                    writer.write(HttpResponses.methodNotAllowed(request.version(), allowedMethods));
+            case RoutingResult.NotFound() -> writer.write(HttpResponses.notFound(request.version()));
+            case RoutingResult.Redirect(var location) ->
+                    writer.write(HttpResponses.redirect(request.version(), location));
         }
     }
 
@@ -248,43 +248,6 @@ public class Router implements HttpHandler {
         }
 
         return longestMatchingRoute == null ? Optional.empty() : Optional.of(subtreeRoutes.get(longestMatchingRoute));
-    }
-
-    /**
-     * Writes a {@code 404 Not Found} response.
-     *
-     * @param writer  the writer used to produce the response
-     * @param request the request whose HTTP version is used for the response
-     * @throws IOException if writing the response fails
-     */
-    private void writeNotFound(ResponseWriter writer, HttpRequest request) throws IOException {
-        writer.write(new HttpResponse(request.version(), HttpStatus.NOT_FOUND));
-    }
-
-    /**
-     * Writes a {@code 405 Method Not Allowed} response with an {@code Allow} header listing the supported methods.
-     *
-     * @param writer         the writer used to produce the response
-     * @param request        the request whose HTTP version is used for the response
-     * @param allowedMethods the methods supported by the matched route
-     * @throws IOException if writing the response fails
-     */
-    private void writeMethodNotAllowed(ResponseWriter writer, HttpRequest request, Set<HttpMethod> allowedMethods) throws IOException {
-        var allowHeaderValue = allowedMethods.stream().map(HttpMethod::name).sorted().collect(Collectors.joining(", "));
-        var headers = new HttpHeaders().add("Allow", allowHeaderValue);
-        writer.write(new HttpResponse(request.version(), HttpStatus.METHOD_NOT_ALLOWED, headers, new byte[0]));
-    }
-
-    /**
-     * Writes a {@code 301 Moved Permanently} redirect response.
-     *
-     * @param writer   the writer used to produce the response
-     * @param request  the request whose HTTP version is used for the response
-     * @param location the target path supplied in the {@code Location} header
-     * @throws IOException if writing the response fails
-     */
-    private void writeRedirect(ResponseWriter writer, HttpRequest request, String location) throws IOException {
-        writer.write(new HttpResponse(request.version(), HttpStatus.MOVED_PERMANENTLY, new HttpHeaders().add("Location", location), new byte[0]));
     }
 
     /**

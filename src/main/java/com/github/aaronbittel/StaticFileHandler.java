@@ -41,7 +41,7 @@ public record StaticFileHandler(Path root) implements HttpHandler {
                 writeString(writer, request, content);
             }
             case ResolvedResource.FileResource fileResource -> writeFile(writer, request, fileResource.path());
-            case ResolvedResource.NotFound _ -> writeNotFound(writer, request);
+            case ResolvedResource.NotFound _ -> writer.write(HttpResponses.notFound(request.version()));
         }
     }
 
@@ -52,7 +52,7 @@ public record StaticFileHandler(Path root) implements HttpHandler {
                 writeStringHeaders(writer, request, content);
             }
             case ResolvedResource.FileResource fileResource -> writeFileHeaders(writer, request, fileResource.path());
-            case ResolvedResource.NotFound _ -> writeNotFound(writer, request);
+            case ResolvedResource.NotFound _ -> writer.write(HttpResponses.notFound(request.version()));
         }
     }
 
@@ -99,11 +99,6 @@ public record StaticFileHandler(Path root) implements HttpHandler {
         var contentLength = content.getBytes(StandardCharsets.UTF_8).length;
         var headers = createFileHeaders(contentLength, HTML_CONTENT_TYPE);
         var response = new HttpResponse(request.version(), HttpStatus.OK, headers);
-        writer.write(response);
-    }
-
-    void writeNotFound(ResponseWriter writer, HttpRequest request) throws IOException {
-        var response = new HttpResponse(request.version(), HttpStatus.NOT_FOUND);
         writer.write(response);
     }
 

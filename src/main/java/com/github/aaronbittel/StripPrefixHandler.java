@@ -13,7 +13,7 @@ public record StripPrefixHandler(HttpHandler next, String prefix) implements Htt
     @Override
     public void handleRequest(ResponseWriter writer, HttpRequest request) throws IOException {
         if (!matchesPrefix(request.path())) {
-            writer.write(new HttpResponse(request.version(), HttpStatus.NOT_FOUND));
+            writer.write(HttpResponses.notFound(request.version()));
             return;
         }
 

@@ -52,9 +52,7 @@ class StaticFileHandlerTest {
         @Test
         void returns_not_found_when_file_does_not_exist() throws IOException {
             staticFileHandler.handleRequest(recorder, request(HttpMethod.GET, "/unknown-file"));
-
-            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
-            assertThat(recorder.response()).isEqualTo(expected);
+            assertThat(recorder.response()).isEqualTo(HttpResponses.notFound(HttpVersion.HTTP_1_1));
         }
 
         @Test
@@ -90,9 +88,7 @@ class StaticFileHandlerTest {
         @Test
         void returns_not_found_when_file_does_not_exist() throws IOException {
             staticFileHandler.handleRequest(recorder, request(HttpMethod.HEAD, "/unknown-file"));
-
-            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.NOT_FOUND);
-            assertThat(recorder.response()).isEqualTo(expected);
+            assertThat(recorder.response()).isEqualTo(HttpResponses.notFound(HttpVersion.HTTP_1_1));
         }
     }
 }

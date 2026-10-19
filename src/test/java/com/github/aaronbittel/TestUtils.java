@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestUtils {
 
+    static final HttpHandler NO_OP_HANDLER = (_, _) -> {};
     static final ResponseWriter NO_OP_RESPONSE_WRITER = _ -> {};
 
     static class RecordingHandler implements HttpHandler {

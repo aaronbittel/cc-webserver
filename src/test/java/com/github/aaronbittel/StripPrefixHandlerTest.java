@@ -28,8 +28,7 @@ class StripPrefixHandlerTest {
     @ParameterizedTest
     @MethodSource("prefixes")
     void test_strip_prefix_returns_404_if_not_matching(String prefix) throws IOException {
-        HttpHandler next = (writer, _) -> writer.write(new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK));
-        var handler = new StripPrefixHandler(next, prefix);
+        var handler = new StripPrefixHandler(TestUtils.NO_OP_HANDLER, prefix);
 
         handler.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/"));
         TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
@@ -49,8 +48,7 @@ class StripPrefixHandlerTest {
 
     @Test
     void only_matches_complete_path_segments() throws IOException {
-        HttpHandler next = (writer, _) -> writer.write(new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK));
-        var handler = new StripPrefixHandler(next, "/prefix");
+        var handler = new StripPrefixHandler(TestUtils.NO_OP_HANDLER, "/prefix");
 
         handler.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/prefix-not"));
         TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);

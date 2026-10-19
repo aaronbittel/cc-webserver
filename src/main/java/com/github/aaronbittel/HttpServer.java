@@ -68,7 +68,6 @@ public class HttpServer implements AutoCloseable {
         var out = new BufferedOutputStream(client.getOutputStream());
 
         HttpRequest request;
-        HttpResponse response;
 
         try {
             request = parser.parseRequest();
@@ -76,8 +75,7 @@ public class HttpServer implements AutoCloseable {
             log.warning("Invalid HTTP request: " + e.getMessage());
 
             var writer = HttpResponseWriter.withBody(out);
-            response = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.BAD_REQUEST);
-            writer.write(response);
+            writer.write(HttpResponses.badRequest(HttpVersion.HTTP_1_1));
             return;
         }
 
