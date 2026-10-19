@@ -273,4 +273,30 @@ public class RouterTest {
         TestUtils.assertStatus(recorder, HttpStatus.METHOD_NOT_ALLOWED);
         assertThat(recorder.response().headers().get("Allow")).hasValue("GET, HEAD");
     }
+
+    @Test
+    void reject_mount_prefix_without_starting_slash() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new Router().mount("path", new Router()));
+    }
+
+    @Test
+    void mount_rejects_duplicate_prefix_after_normalization() {
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                new Router()
+                        .mount("/path", new Router())
+                        .mount("/path/", new Router()));
+    }
+
+    @Test
+    void reject_duplicate_mount_and_subtree_prefix_regardless_of_registration_order() {
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                new Router()
+                        .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER)
+                        .mount("/path/", new Router()));
+
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                new Router()
+                        .mount("/path/", new Router())
+                        .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER));
+    }
 }

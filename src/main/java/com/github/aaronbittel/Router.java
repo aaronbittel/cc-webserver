@@ -37,6 +37,7 @@ public class Router implements HttpHandler {
 
     private final Map<String, Map<HttpMethod, HttpHandler>> exactRoutes = new HashMap<>();
     private final Map<String, Map<HttpMethod, HttpHandler>> subtreeRoutes = new HashMap<>();
+    private final Map<String, HttpHandler> mountRoutes = new HashMap<>();
 
     /**
      * Handles an HTTP request by resolving its route and dispatching it to the selected handler or writing the
@@ -81,12 +82,37 @@ public class Router implements HttpHandler {
 
         var routes = path.endsWith("/") ? subtreeRoutes : exactRoutes;
 
+        if (duplicatedRoute(mountRoutes.keySet(), path)) {
+            throw new IllegalArgumentException("Duplicated path: " + path);
+        }
+
         var methods = routes.computeIfAbsent(path, _ -> new HashMap<>());
 
         if (methods.putIfAbsent(method, handler) != null) {
             throw new IllegalArgumentException("Route already registered: " + method + " " + path);
         }
 
+        return this;
+    }
+
+    public Router mount(String prefix, Router router) {
+        if (!prefix.startsWith("/")) {
+            throw new IllegalArgumentException("Route path must start with '/': " + prefix);
+        }
+
+        if (!prefix.endsWith("/")) {
+            prefix += "/";
+        }
+
+        if (mountRoutes.containsKey(prefix)) {
+            throw new IllegalArgumentException("Mount already registered: " + prefix);
+        }
+
+        if (duplicatedRoute(subtreeRoutes.keySet(), prefix)) {
+            throw new IllegalArgumentException("Duplicated path: " + prefix);
+        }
+
+        mountRoutes.put(prefix, new StripPrefixHandler(router, prefix.substring(0, prefix.length() - 1)));
         return this;
     }
 
@@ -296,6 +322,9 @@ public class Router implements HttpHandler {
                 allowedMethods = Set.copyOf(allowedMethods);
             }
         }
+    }
 
+    private boolean duplicatedRoute(Set<String> strings, String prefix) {
+        return strings.contains(prefix);
     }
 }
