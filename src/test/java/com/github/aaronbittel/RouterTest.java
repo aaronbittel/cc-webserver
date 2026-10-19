@@ -10,6 +10,7 @@ import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 public class RouterTest {
 
@@ -145,6 +146,7 @@ public class RouterTest {
             var path = SUBTREE_PATH + suffix;
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, path));
             TestUtils.assertWasCalled(getHandler);
+            assertThat(getHandler.received().requestUrl().path()).isEqualTo(path);
         }
 
         @Test
@@ -159,6 +161,15 @@ public class RouterTest {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.POST, EXACT_PATH));
             TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
             assertThat(recorder.response().headers().get("Location")).hasValue(SUBTREE_PATH);
+        }
+
+        @Test
+        void preserves_query_string_when_matching_nested_path() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, SUBTREE_PATH + "docs?query=value"));
+
+            TestUtils.assertWasCalled(getHandler);
+            assertThat(getHandler.received().requestUrl().query())
+                    .isEqualTo("query=value");
         }
     }
 
@@ -195,6 +206,14 @@ public class RouterTest {
             TestUtils.assertWasCalled(subtreeHandler);
             TestUtils.assertWasNotCalled(exactHandler);
         }
+
+        @Test
+        void matches_nested_path_with_exact_route_registered() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, SUBTREE_PATH + "docs"));
+
+            TestUtils.assertWasCalled(subtreeHandler);
+            TestUtils.assertWasNotCalled(exactHandler);
+        }
     }
 
     @Nested
@@ -211,7 +230,7 @@ public class RouterTest {
             getHandler = new TestUtils.RecordingHandler();
 
             router = new Router()
-                    .mount("/users", new Router().add(HttpMethod.GET, "/", getHandler));
+                    .mount(MOUNT_PREFIX, new Router().add(HttpMethod.GET, "/", getHandler));
         }
 
         @Test
@@ -316,7 +335,7 @@ public class RouterTest {
         }
 
         @Test
-        void mount_rejects_duplicate_prefix_after_normalization() {
+        void rejects_duplicate_mount_prefix_after_normalization() {
             assertThatIllegalArgumentException().isThrownBy(() ->
                     new Router()
                             .mount("/path", new Router())
@@ -324,7 +343,7 @@ public class RouterTest {
         }
 
         @Test
-        void rejects_duplicate_mount_and_subtree_prefix_regardless_of_registration_order() {
+        void rejects_conflicting_mount_and_subtree_prefixes() {
             assertThatIllegalArgumentException().isThrownBy(() ->
                     new Router()
                             .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER)
@@ -334,6 +353,14 @@ public class RouterTest {
                     new Router()
                             .mount("/path/", new Router())
                             .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER));
+        }
+
+        @Test
+        void allows_different_methods_for_same_path() {
+            assertThatNoException().isThrownBy(() -> new Router()
+                    .add(HttpMethod.GET, "/hello-world", TestUtils.NO_OP_HANDLER)
+                    .add(HttpMethod.POST, "/hello-world", TestUtils.NO_OP_HANDLER)
+            );
         }
     }
 }
