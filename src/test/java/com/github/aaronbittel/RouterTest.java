@@ -262,4 +262,15 @@ public class RouterTest {
         assertThat(recorder.response().headers().get("Location"))
                 .hasValue("/static/");
     }
+
+    @Test
+    void first_check_longest_matching_prefix_then_method() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/users/", TestUtils.NO_OP_HANDLER)
+                .add(HttpMethod.GET, "/users/docs/", TestUtils.NO_OP_HANDLER);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.POST, "/users/docs/"));
+        TestUtils.assertStatus(recorder, HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(recorder.response().headers().get("Allow")).hasValue("GET, HEAD");
+    }
 }

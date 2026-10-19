@@ -111,9 +111,9 @@ public class Router implements HttpHandler {
             return result.orElseThrow();
         }
 
-        result = lookupSubtreeRoute(request);
-        if (result.isPresent()) {
-            return result.orElseThrow();
+        var subtreeMatch = findLongestMatchingSubtreeRoute(request.path());
+        if (subtreeMatch.isPresent()) {
+            return resolveMatchedRoute(subtreeMatch.orElseThrow().methods(), request);
         }
 
         return new RoutingResult.NotFound();
@@ -133,16 +133,6 @@ public class Router implements HttpHandler {
         }
 
         return findExactRoute(request.path()).map(route -> resolveMatchedRoute(route, request));
-    }
-
-    /**
-     * Looks up the most specific subtree route matching the request path and resolves its HTTP method.
-     *
-     * @param request the request to resolve
-     * @return a routing result if a subtree route matches, or empty otherwise
-     */
-    private Optional<RoutingResult> lookupSubtreeRoute(HttpRequest request) {
-        return findLongestMatchingSubtreeRoute(request.path()).map(route -> resolveMatchedRoute(route, request));
     }
 
     /**
@@ -234,21 +224,25 @@ public class Router implements HttpHandler {
      * @param path the request path to match
      * @return the method-to-handler mapping for the longest matching subtree route, or empty if no route matches
      */
-    private Optional<Map<HttpMethod, HttpHandler>> findLongestMatchingSubtreeRoute(String path) {
-        String longestMatchingRoute = null;
+    private Optional<SubtreeMatch> findLongestMatchingSubtreeRoute(String path) {
+        String longestMatchingPrefix = null;
 
         for (var entry : subtreeRoutes.entrySet()) {
             var prefix = entry.getKey();
             if (!path.startsWith(prefix)) {
                 continue;
             }
-            if (longestMatchingRoute == null || prefix.length() > longestMatchingRoute.length()) {
-                longestMatchingRoute = prefix;
+            if (longestMatchingPrefix == null || prefix.length() > longestMatchingPrefix.length()) {
+                longestMatchingPrefix = prefix;
             }
         }
 
-        return longestMatchingRoute == null ? Optional.empty() : Optional.of(subtreeRoutes.get(longestMatchingRoute));
+        return longestMatchingPrefix == null
+                ? Optional.empty()
+                : Optional.of(new SubtreeMatch(longestMatchingPrefix, subtreeRoutes.get(longestMatchingPrefix)));
     }
+
+    private record SubtreeMatch(String prefix, Map<HttpMethod, HttpHandler> methods) {}
 
     /**
      * Returns the methods allowed by a matched route.
@@ -302,5 +296,6 @@ public class Router implements HttpHandler {
                 allowedMethods = Set.copyOf(allowedMethods);
             }
         }
+
     }
 }
