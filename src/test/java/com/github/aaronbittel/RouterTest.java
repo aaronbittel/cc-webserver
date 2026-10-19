@@ -53,6 +53,7 @@ public class RouterTest {
 
         router.handleRequest(recorder, request);
         TestUtils.assertStatus(recorder, HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(recorder.response().headers().get("Allow")).hasValue("GET, HEAD");
     }
 
     @Test
@@ -241,5 +242,26 @@ public class RouterTest {
 
         TestUtils.assertWasNotCalled(recordingHandler);
         TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void redirects_to_subtree_path_even_if_method_is_not_allowed() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/static/", NO_OP_HANDLER);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.POST, "/static"));
+        TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+    }
+
+    @Test
+    void redirects_to_subtree_base_even_when_parent_subtree_matches() throws IOException {
+        var router = new Router()
+                .add(HttpMethod.GET, "/", NO_OP_HANDLER)
+                .add(HttpMethod.GET, "/static/", NO_OP_HANDLER);
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/static"));
+        TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+        assertThat(recorder.response().headers().get("Location"))
+                .hasValue("/static/");
     }
 }
