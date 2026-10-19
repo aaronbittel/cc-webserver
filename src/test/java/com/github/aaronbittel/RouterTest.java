@@ -363,4 +363,16 @@ public class RouterTest {
         TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
         assertThat(recorder.response().headers().get("Location")).hasValue("/users/");
     }
+
+    @Test
+    void mount_route_preserves_query_string_when_stripping_prefix() throws IOException {
+        var handler = new TestUtils.RecordingHandler();
+        var router = new Router()
+                .mount("/users", new Router().add(HttpMethod.GET, "/docs", handler));
+
+        router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/users/docs?query=value"));
+        TestUtils.assertWasCalled(handler);
+        assertThat(handler.received().requestUrl().path()).isEqualTo("/docs");
+        assertThat(handler.received().requestUrl().query()).isEqualTo("query=value");
+    }
 }
