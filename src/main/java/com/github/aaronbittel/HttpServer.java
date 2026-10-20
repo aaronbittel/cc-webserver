@@ -3,6 +3,7 @@ package com.github.aaronbittel;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -15,33 +16,30 @@ public class HttpServer implements AutoCloseable {
 
     private static final int BACKLOG = 5;
 
-    private final ServerConfig config;
     private volatile ServerSocket serverSocket;
-
     private final Router router;
 
-    public HttpServer(ServerConfig config, Router router) {
-        this.config = config;
+    public HttpServer(Router router) {
         this.router = router;
     }
 
-    public void bind() throws IOException {
-        this.serverSocket = new ServerSocket();
-        this.serverSocket.setReuseAddress(true);
-        this.serverSocket.bind(
-                new InetSocketAddress(config.address(), config.port()),
-                BACKLOG
-        );
+    public void start(InetAddress address, int port) throws IOException {
+        bind(address, port);
+        serve();
     }
 
-    public void serve() throws IOException {
-        log.info(() -> String.format(
-                "Serving HTTP on %s port %d (http://%s:%d/) from directory %s",
-                config.address().getHostAddress(),
-                config.port(),
-                config.address().getHostAddress(),
-                config.port(),
-                config.root()));
+    void bind(InetAddress address, int port) throws IOException {
+        this.serverSocket = new ServerSocket();
+        this.serverSocket.setReuseAddress(true);
+        this.serverSocket.bind(new InetSocketAddress(address, port), BACKLOG);
+    }
+
+    void serve() throws IOException {
+        log.info(() -> String.format("Serving HTTP on %s port %d (http://%s:%d/)",
+                serverSocket.getInetAddress().getHostAddress(),
+                serverSocket.getLocalPort(),
+                serverSocket.getInetAddress().getHostAddress(),
+                serverSocket.getLocalPort()));
 
         try {
             while (!serverSocket.isClosed()) {

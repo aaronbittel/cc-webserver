@@ -52,17 +52,11 @@ public class StaticFileHandlerE2ETests {
 
     @BeforeEach
     void setupServer() throws IOException {
-        var config = new ServerConfig(
-                InetAddress.getLoopbackAddress(),
-                0,
-                root
-        );
-
         Router router = new Router()
                 .add(HttpMethod.GET, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"));
 
-        server = new HttpServer(config, router);
-        server.bind();
+        server = new HttpServer(router);
+        server.bind(InetAddress.getLoopbackAddress(), 0);
 
         executor = Executors.newSingleThreadExecutor();
 

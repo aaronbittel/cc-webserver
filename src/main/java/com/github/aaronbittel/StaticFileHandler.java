@@ -18,6 +18,9 @@ public record StaticFileHandler(Path root) implements HttpHandler {
 
     public StaticFileHandler {
         root = root.toAbsolutePath().normalize();
+        if (!Files.isDirectory(root)) {
+            throw new IllegalArgumentException("Root directory does not exist: " + root);
+        }
     }
 
     private static final String HTML_TEMPLATE = loadHtml();

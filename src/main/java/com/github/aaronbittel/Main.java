@@ -27,9 +27,7 @@ public class Main {
             return;
         }
 
-        var config = new ServerConfig(address, port, root);
-
-        var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(config.root()), "/static");
+        var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(root), "/static");
 
         var usersRouter = new Router()
                 .add(HttpMethod.GET, "/", (writer, request) -> {
@@ -82,7 +80,7 @@ public class Main {
                 })
                 .mount("/users", usersRouter);
 
-        try (var server = new HttpServer(config, router)) {
+        try (var server = new HttpServer(router)) {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 System.out.println("Shutting down server...");
                 try {
@@ -92,8 +90,7 @@ public class Main {
                 }
             }
             ));
-            server.bind();
-            server.serve();
+            server.start(address, port);
         }
     }
 
