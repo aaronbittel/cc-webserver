@@ -130,7 +130,7 @@ public class RouterTest {
         @Test
         void redirects_base_path_to_trailing_slash() throws IOException {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, EXACT_PATH));
-            TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+            TestUtils.assertStatus(recorder, HttpStatus.TEMPORARY_REDIRECT);
             assertThat(recorder.response().headers().get("Location")).hasValue(SUBTREE_PATH);
         }
 
@@ -159,7 +159,7 @@ public class RouterTest {
         @Test
         void redirects_base_path_even_when_method_is_not_allowed() throws IOException {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.POST, EXACT_PATH));
-            TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+            TestUtils.assertStatus(recorder, HttpStatus.TEMPORARY_REDIRECT);
             assertThat(recorder.response().headers().get("Location")).hasValue(SUBTREE_PATH);
         }
 
@@ -260,7 +260,7 @@ public class RouterTest {
         @Test
         void redirects_mount_prefix_to_trailing_slash() throws IOException {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, MOUNT_PREFIX));
-            TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+            TestUtils.assertStatus(recorder, HttpStatus.TEMPORARY_REDIRECT);
             assertThat(recorder.response().headers().get("Location")).hasValue(MOUNT_ROOT_PATH);
         }
 
@@ -280,7 +280,7 @@ public class RouterTest {
                 .add(HttpMethod.GET, "/users/", TestUtils.NO_OP_HANDLER);
 
         router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, "/users"));
-        TestUtils.assertStatus(recorder, HttpStatus.MOVED_PERMANENTLY);
+        TestUtils.assertStatus(recorder, HttpStatus.TEMPORARY_REDIRECT);
         assertThat(recorder.response().headers().get("Location"))
                 .hasValue("/users/");
     }

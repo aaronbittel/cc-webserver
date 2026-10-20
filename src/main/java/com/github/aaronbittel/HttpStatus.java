@@ -5,6 +5,8 @@ public enum HttpStatus {
     CREATED(201, "CREATED"),
 
     MOVED_PERMANENTLY(301, "Moved Permanently"),
+    TEMPORARY_REDIRECT(307, "Temporary Redirect"),
+    PERMANENT_REDIRECT(308, "Permanent Redirect"),
 
     BAD_REQUEST(400, "Bad Request"),
     NOT_FOUND(404, "Not Found"),

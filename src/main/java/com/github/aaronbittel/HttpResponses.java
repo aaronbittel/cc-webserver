@@ -27,7 +27,7 @@ public final class HttpResponses {
         var headers = new HttpHeaders()
                 .add("Location", location);
 
-        return new HttpResponse(version, HttpStatus.MOVED_PERMANENTLY, headers, new byte[0]);
+        return new HttpResponse(version, HttpStatus.TEMPORARY_REDIRECT, headers, new byte[0]);
     }
 
     public static HttpResponse badRequest(HttpVersion version) {
