@@ -64,18 +64,15 @@ public class Router implements HttpHandler {
             throw new IllegalArgumentException("Route path must start with '/': " + path);
         }
 
-        var routes = path.endsWith("/") ? subtreeRoutes : exactRoutes;
-
-        if (path.endsWith("/") && mountRoutes.containsKey(path)) {
-            throw new IllegalArgumentException("Duplicated path: " + path);
+        if (isSubtreePattern(path)) {
+            if (mountRoutes.containsKey(path)) {
+                throw new IllegalArgumentException("Duplicated path: " + path);
+            }
+            registerRoute(subtreeRoutes, path, handler, method);
+            return this;
         }
 
-        var methods = routes.computeIfAbsent(path, _ -> new HashMap<>());
-
-        if (methods.putIfAbsent(method, handler) != null) {
-            throw new IllegalArgumentException("Route already registered: " + method + " " + path);
-        }
-
+        registerRoute(exactRoutes, path, handler, method);
         return this;
     }
 
@@ -104,7 +101,7 @@ public class Router implements HttpHandler {
             throw new IllegalArgumentException("Route path must start with '/': " + prefix);
         }
 
-        if (!prefix.endsWith("/")) {
+        if (!isSubtreePattern(prefix)) {
             prefix += "/";
         }
 
@@ -180,7 +177,7 @@ public class Router implements HttpHandler {
      * @return a routing result if an exact route exists, or empty otherwise
      */
     private Optional<RoutingResult> lookupExactRoute(HttpRequest request) {
-        if (request.path().endsWith("/")) {
+        if (isSubtreePattern(request.path())) {
             return Optional.empty();
         }
 
@@ -201,7 +198,7 @@ public class Router implements HttpHandler {
     private Optional<RoutingResult> lookupTrailingSlashRedirect(HttpRequest request) {
         var path = request.path();
 
-        if (path.endsWith("/")) {
+        if (isSubtreePattern(path)) {
             return Optional.empty();
         }
 
@@ -371,6 +368,38 @@ public class Router implements HttpHandler {
         }
 
         return allowedMethods;
+    }
+
+    /**
+     * Determines whether the given path represents a subtree pattern.
+     *
+     * @param path the route path to check
+     * @return {@code true} if the path ends with a slash, {@code false} otherwise
+     */
+    private static boolean isSubtreePattern(String path) {
+        return path.endsWith("/");
+    }
+
+    /**
+     * Registers a handler for the specified HTTP method and path.
+     *
+     * @param routes  the route map in which to register the handler
+     * @param path    the route path
+     * @param handler the handler to register
+     * @param method  the HTTP method associated with the handler
+     * @throws IllegalArgumentException if a handler is already registered for the specified path and HTTP method
+     */
+    private void registerRoute(
+            Map<String, Map<HttpMethod, HttpHandler>> routes,
+            String path,
+            HttpHandler handler,
+            HttpMethod method
+    ) {
+        var methods = routes.computeIfAbsent(path, _ -> new HashMap<>());
+
+        if (methods.putIfAbsent(method, handler) != null) {
+            throw new IllegalArgumentException("Route already registered: " + method + " " + path);
+        }
     }
 
     /** A matched subtree route, including its registered prefix and method mappings. */
