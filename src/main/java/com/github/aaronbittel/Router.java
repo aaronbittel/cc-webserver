@@ -40,11 +40,17 @@ public class Router implements HttpHandler {
     private final Map<String, Map<HttpMethod, HttpHandler>> subtreeRoutes = new HashMap<>();
     private final Map<String, HttpHandler> mountRoutes = new HashMap<>();
 
+    private static final String TERMINAL_WILDCARD_PATTERN = "/{$}";
+
     /**
      * Registers a handler for an HTTP method and path.
      *
      * <p>A path without a trailing slash registers an exact route, matching only that path. A path ending in
      * {@code /} registers a subtree route, matching its base path and all descendant paths.
+     *
+     * <p>The terminal wildcard pattern {@code /{$}} registers an exact route. The wildcard is removed before
+     * registration, so {@code /users/{$}} registers an exact route for {@code /users}, and {@code /{$}} registers an
+     * exact route for {@code /}.
      *
      * <p>An exact route and a subtree route may coexist for the same logical base path. For example, {@code /users}
      * and {@code /users/} are distinct registrations. An exact route takes precedence for its exact path.
@@ -60,8 +66,12 @@ public class Router implements HttpHandler {
      *                                  registered, or the subtree path conflicts with a mount
      */
     public Router add(HttpMethod method, String path, HttpHandler handler) {
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("Route path must start with '/': " + path);
+        validateAddPath(path);
+
+        if (isTerminalWildcardPattern(path)) {
+            path = resolveTerminalWildcardPath(path);
+            registerRoute(exactRoutes, path, handler, method);
+            return this;
         }
 
         if (isSubtreePattern(path)) {
@@ -97,9 +107,7 @@ public class Router implements HttpHandler {
      *                                  normalized prefix, or a subtree route is registered at that prefix
      */
     public Router mount(String prefix, Router router) {
-        if (!prefix.startsWith("/")) {
-            throw new IllegalArgumentException("Route path must start with '/': " + prefix);
-        }
+        validateMountPath(prefix);
 
         if (!isSubtreePattern(prefix)) {
             prefix += "/";
@@ -170,17 +178,10 @@ public class Router implements HttpHandler {
     /**
      * Looks up an exact route for the request path and resolves its HTTP method.
      *
-     * <p>Paths ending in {@code /} are not considered for exact-route matching because they are registered as
-     * subtree routes.
-     *
      * @param request the request to resolve
      * @return a routing result if an exact route exists, or empty otherwise
      */
     private Optional<RoutingResult> lookupExactRoute(HttpRequest request) {
-        if (isSubtreePattern(request.path())) {
-            return Optional.empty();
-        }
-
         return findExactRoute(request.path())
                 .map(route -> resolveMatchedRoute(route, request));
     }
@@ -399,6 +400,96 @@ public class Router implements HttpHandler {
 
         if (methods.putIfAbsent(method, handler) != null) {
             throw new IllegalArgumentException("Route already registered: " + method + " " + path);
+        }
+    }
+
+    /**
+     * Resolves a terminal wildcard pattern to its corresponding exact path.
+     *
+     * @param path the terminal wildcard pattern to resolve
+     * @return the path with the terminal wildcard pattern removed, or {@code "/"} if the resulting path is empty
+     */
+    private static String resolveTerminalWildcardPath(String path) {
+        path = path.substring(0, path.length() - TERMINAL_WILDCARD_PATTERN.length());
+        if (path.isEmpty()) {
+            path = "/";
+        }
+        return path;
+    }
+
+    /**
+     * Determines whether the given path ends with the terminal wildcard pattern.
+     *
+     * @param path the route path to check
+     * @return {@code true} if the path ends with the terminal wildcard pattern, {@code false} otherwise
+     */
+    private static boolean isTerminalWildcardPattern(String path) {
+        return path.endsWith(TERMINAL_WILDCARD_PATTERN);
+    }
+
+    /**
+     * Validates that a path is non-null and starts with {@code /}.
+     *
+     * @param path the path to validate
+     * @throws IllegalArgumentException if the path is {@code null} or does not start with {@code /}
+     */
+    private static void validateAbsolutePath(String path) {
+        if (path == null || !path.startsWith("/")) {
+            throw new IllegalArgumentException("Path must start with '/': " + path);
+        }
+    }
+
+    /**
+     * Validates a route path before registration.
+     *
+     * <p>The path must be absolute, and the terminal wildcard pattern, if present, must appear only at the end.
+     *
+     * @param path the route path to validate
+     * @throws IllegalArgumentException if the path is invalid or the terminal wildcard pattern appears in an
+     *                                  unsupported position
+     */
+    private static void validateAddPath(String path) {
+        validateAbsolutePath(path);
+        validateWildcardPattern(path);
+    }
+
+    /**
+     * Validates the position of the terminal wildcard pattern in a route path.
+     *
+     * <p>If present, the pattern must occur at the end of the path.
+     *
+     * @param path the route path to validate
+     * @throws IllegalArgumentException if the terminal wildcard pattern appears before the end of the path
+     */
+    private static void validateWildcardPattern(String path) {
+        int wildcardIndex = path.indexOf(TERMINAL_WILDCARD_PATTERN);
+        if (wildcardIndex < 0) {
+            return;
+        }
+
+        var expectedWildcardIndex = path.length() - TERMINAL_WILDCARD_PATTERN.length();
+        if (expectedWildcardIndex < 0) {
+            return;
+        }
+
+        if (wildcardIndex != expectedWildcardIndex) {
+            throw new IllegalArgumentException("Terminal wildcard pattern must appear at the end: " + path);
+        }
+    }
+
+    /**
+     * Validates a mount prefix before mounting another router.
+     *
+     * <p>The prefix must be absolute and must not contain the terminal wildcard pattern.
+     *
+     * @param path the mount prefix to validate
+     * @throws IllegalArgumentException if the prefix is invalid or contains the terminal wildcard pattern
+     */
+    private static void validateMountPath(String path) {
+        validateAbsolutePath(path);
+
+        if (path.contains(TERMINAL_WILDCARD_PATTERN)) {
+            throw new IllegalArgumentException("Mount prefix must not contain wildcard patterns: " + path);
         }
     }
 

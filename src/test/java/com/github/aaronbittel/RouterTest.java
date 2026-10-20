@@ -314,6 +314,65 @@ public class RouterTest {
     }
 
     @Nested
+    class TerminalWildcardRouteTests {
+
+        private Router router;
+        private TestUtils.RecordingHandler rootHandler;
+        private TestUtils.RecordingHandler usersHandler;
+        private static final String ROOT_PATH = "/";
+        private static final String USERS_PATH = "/users";
+
+        @BeforeEach
+        void setUp() {
+            rootHandler = new TestUtils.RecordingHandler();
+            usersHandler = new TestUtils.RecordingHandler();
+            router = new Router()
+                    .add(HttpMethod.GET, "/{$}", rootHandler)
+                    .add(HttpMethod.GET, USERS_PATH + "/{$}", usersHandler);
+        }
+
+        @Test
+        void matches_root_path() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, ROOT_PATH));
+            TestUtils.assertWasCalled(rootHandler);
+        }
+
+        @Test
+        void matches_base_path_without_trailing_slash() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, USERS_PATH));
+            TestUtils.assertWasCalled(usersHandler);
+        }
+
+        @Test
+        void does_not_match_trailing_slash() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, USERS_PATH + "/"));
+
+            TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
+            TestUtils.assertWasNotCalled(usersHandler);
+        }
+
+        @Test
+        void does_not_match_nested_path() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, USERS_PATH + "/docs"));
+
+            TestUtils.assertStatus(recorder, HttpStatus.NOT_FOUND);
+            TestUtils.assertWasNotCalled(usersHandler);
+        }
+
+        @Test
+        void prefers_exact_root_route_over_root_subtree_route() throws IOException {
+            var subtreeHandler = new TestUtils.RecordingHandler();
+
+            router.add(HttpMethod.GET, "/", subtreeHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, ROOT_PATH));
+
+            TestUtils.assertWasCalled(rootHandler);
+            TestUtils.assertWasNotCalled(subtreeHandler);
+        }
+    }
+
+    @Nested
     class RouteRegistrationTests {
         @Test
         void rejects_path_without_leading_slash() {
@@ -361,6 +420,45 @@ public class RouterTest {
                     .add(HttpMethod.GET, "/hello-world", TestUtils.NO_OP_HANDLER)
                     .add(HttpMethod.POST, "/hello-world", TestUtils.NO_OP_HANDLER)
             );
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "/path/{$}/path",
+                "/path/{$}/path/{$}",
+        })
+        void rejects_terminal_wildcard_pattern_not_at_the_end(String path) {
+            assertThatIllegalArgumentException().isThrownBy(() -> new Router()
+                    .add(HttpMethod.GET, path, TestUtils.NO_OP_HANDLER));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "/{$}",
+                "/path/{$}",
+        })
+        void allows_terminal_wildcard_pattern(String path) {
+            assertThatNoException().isThrownBy(() -> new Router()
+                    .add(HttpMethod.GET, path, TestUtils.NO_OP_HANDLER));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "/{$}",
+                "/path/{$}",
+                "/path/{$}/path",
+                "/path/{$}/path/{$}",
+        })
+        void rejects_terminal_wildcard_pattern_in_mount_paths(String path) {
+            assertThatIllegalArgumentException().isThrownBy(() -> new Router()
+                    .mount(path, new Router()));
+        }
+
+        @Test
+        void allows_exact_root_and_root_subtree_routes_to_coexist() {
+            assertThatNoException().isThrownBy(() -> new Router()
+                    .add(HttpMethod.GET, "/", TestUtils.NO_OP_HANDLER)
+                    .add(HttpMethod.GET, "/{$}", TestUtils.NO_OP_HANDLER));
         }
     }
 }
