@@ -65,4 +65,39 @@ class HttpRequestParserTest {
         var in = new ByteArrayInputStream(headerLine.getBytes(StandardCharsets.US_ASCII));
         assertThatIllegalArgumentException().isThrownBy(() -> HttpRequestParser.parseHeaders(in));
     }
+
+    @Test
+    void parse_request_with_body() throws IOException {
+        var body = "Hello, world!";
+        var requestText = """
+                POST /hello HTTP/1.1\r
+                Content-Length: 13\r
+                \r
+                %s""".formatted(body);
+
+        var in = new ByteArrayInputStream(requestText.getBytes(StandardCharsets.US_ASCII));
+        var parser = new HttpRequestParser(in);
+
+        var expected = new HttpRequest(
+                new HttpRequestLine(HttpMethod.POST, "/hello", HttpVersion.HTTP_1_1),
+                buildHeaders("Content-Length", "13"),
+                body.getBytes(StandardCharsets.US_ASCII)
+        );
+
+        assertThat(parser.parseRequest()).isEqualTo(expected);
+    }
+
+    @Test
+    void body_stream_contains_body_bytes() throws IOException {
+        var expectedBody = "Hello, world!".getBytes(StandardCharsets.UTF_8);
+        var request = new HttpRequest(
+                new HttpRequestLine(HttpMethod.POST, "/hello", HttpVersion.HTTP_1_1),
+                new HttpHeaders(),
+                expectedBody
+        );
+
+        try (var body = request.body()) {
+            assertThat(body.readAllBytes()).isEqualTo(expectedBody);
+        }
+    }
 }

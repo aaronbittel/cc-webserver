@@ -1,5 +1,7 @@
 package com.github.aaronbittel;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -46,6 +48,10 @@ public class HttpRequest {
 
     public RequestURL requestUrl() {
         return requestUrl;
+    }
+
+    public InputStream body() {
+        return new ByteArrayInputStream(body);
     }
 
     @Override
