@@ -7,30 +7,26 @@ public final class HttpResponses {
 
     private HttpResponses() {}
 
-    public static HttpResponse notFound(HttpVersion version) {
-        return new HttpResponse(version, HttpStatus.NOT_FOUND);
+    public static void notFound(ResponseWriter writer) {
+        writer.setStatus(HttpStatus.NOT_FOUND);
     }
 
-    public static HttpResponse methodNotAllowed(HttpVersion version, Set<HttpMethod> allowedMethods) {
+    public static void methodNotAllowed(ResponseWriter writer, Set<HttpMethod> allowedMethods) {
         var allow = allowedMethods.stream()
                 .map(HttpMethod::name)
                 .sorted()
                 .collect(Collectors.joining(", "));
 
-        var headers = new HttpHeaders()
-                .add("Allow", allow);
-
-        return new HttpResponse(version, HttpStatus.METHOD_NOT_ALLOWED, headers, new byte[0]);
+        writer.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
+        writer.headers().set("Allow", allow);
     }
 
-    public static HttpResponse redirect(HttpVersion version, String location) {
-        var headers = new HttpHeaders()
-                .add("Location", location);
-
-        return new HttpResponse(version, HttpStatus.TEMPORARY_REDIRECT, headers, new byte[0]);
+    public static void redirect(ResponseWriter writer, String location) {
+        writer.setStatus(HttpStatus.TEMPORARY_REDIRECT);
+        writer.headers().set("Location", location);
     }
 
-    public static HttpResponse badRequest(HttpVersion version) {
-        return new HttpResponse(version, HttpStatus.BAD_REQUEST);
+    public static void badRequest(ResponseWriter writer) {
+        writer.setStatus(HttpStatus.BAD_REQUEST);
     }
 }

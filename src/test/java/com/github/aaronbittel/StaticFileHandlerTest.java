@@ -10,15 +10,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static com.github.aaronbittel.TestUtils.buildHeaders;
 import static com.github.aaronbittel.TestUtils.request;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StaticFileHandlerTest {
 
     private static final String FILENAME = "hello-world.txt";
-    private static final byte[] CONTENT = "Hello, World".getBytes(StandardCharsets.UTF_8);
-    private static final String CONTENT_LENGTH = String.valueOf(CONTENT.length);
+    private static final String CONTENT = "Hello, World";
 
     @TempDir
     Path root;
@@ -28,7 +26,7 @@ class StaticFileHandlerTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        Files.write(root.resolve(FILENAME), CONTENT);
+        Files.writeString(root.resolve(FILENAME), CONTENT);
         staticFileHandler = new StaticFileHandler(root);
         recorder = new HttpResponseRecorder();
     }
@@ -40,55 +38,28 @@ class StaticFileHandlerTest {
         void returns_file_contents_when_file_exists() throws IOException {
             staticFileHandler.handleRequest(recorder, request(HttpMethod.GET, "/" + FILENAME));
 
-            var headers = buildHeaders(
-                    "Content-Type", "text/plain",
-                    "Content-Length", CONTENT_LENGTH
-            );
+            var response = recorder.result();
 
-            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, CONTENT);
-            assertThat(recorder.response()).isEqualTo(expected);
+            assertThat(response.status()).isEqualTo(HttpStatus.OK);
+            assertThat(response.headers().get("Content-Type")).hasValue("text/plain");
+            assertThat(new String(response.body(), StandardCharsets.UTF_8)).isEqualTo(CONTENT);
         }
 
         @Test
         void returns_not_found_when_file_does_not_exist() throws IOException {
             staticFileHandler.handleRequest(recorder, request(HttpMethod.GET, "/unknown-file"));
-            assertThat(recorder.response()).isEqualTo(HttpResponses.notFound(HttpVersion.HTTP_1_1));
+            assertThat(recorder.result().status()).isEqualTo(HttpStatus.NOT_FOUND);
         }
 
         @Test
         void query_string_does_not_affect_resource_resolution() throws IOException {
             staticFileHandler.handleRequest(recorder, request(HttpMethod.GET, "/" + FILENAME + "?lang=de"));
 
-            var headers = buildHeaders(
-                    "Content-Type", "text/plain",
-                    "Content-Length", CONTENT_LENGTH
-            );
+            var response = recorder.result();
 
-            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers, CONTENT);
-            assertThat(recorder.response()).isEqualTo(expected);
-        }
-    }
-
-    @Nested
-    class Head {
-
-        @Test
-        void returns_headers_without_body_when_file_exists() throws IOException {
-            staticFileHandler.handleRequest(recorder, request(HttpMethod.HEAD, "/" + FILENAME));
-
-            var headers = buildHeaders(
-                    "Content-Type", "text/plain",
-                    "Content-Length", CONTENT_LENGTH
-            );
-
-            var expected = new HttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, headers);
-            assertThat(recorder.response()).isEqualTo(expected);
-        }
-
-        @Test
-        void returns_not_found_when_file_does_not_exist() throws IOException {
-            staticFileHandler.handleRequest(recorder, request(HttpMethod.HEAD, "/unknown-file"));
-            assertThat(recorder.response()).isEqualTo(HttpResponses.notFound(HttpVersion.HTTP_1_1));
+            assertThat(response.status()).isEqualTo(HttpStatus.OK);
+            assertThat(response.headers().get("Content-Type")).hasValue("text/plain");
+            assertThat(new String(response.body(), StandardCharsets.UTF_8)).isEqualTo(CONTENT);
         }
     }
 }

@@ -2,7 +2,6 @@ package com.github.aaronbittel;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -30,53 +29,27 @@ public class Main {
         var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(root), "/static");
 
         var usersRouter = new Router()
-                .add(HttpMethod.GET, "/", (writer, request) -> {
-                    var body = "Users home".getBytes(StandardCharsets.UTF_8);
-                    writer.write(new HttpResponse(
-                            request.version(),
-                            HttpStatus.OK,
-                            new HttpHeaders()
-                                    .add("Content-Type", "text/plain")
-                                    .add("Content-Length", String.valueOf(body.length)),
-                            body
-                    ));
+                .add(HttpMethod.GET, "/", (writer, _) -> {
+                    writer.headers().set("Content-Type", "text/plain");
+                    writer.write("Users home");
                 })
-                .add(HttpMethod.GET, "/profile", (writer, request) -> {
-                    var body = "User profile".getBytes(StandardCharsets.UTF_8);
-                    writer.write(new HttpResponse(
-                            request.version(),
-                            HttpStatus.OK,
-                            new HttpHeaders()
-                                    .add("Content-Type", "text/plain")
-                                    .add("Content-Length", String.valueOf(body.length)),
-                            body
-                    ));
+                .add(HttpMethod.GET, "/profile", (writer, _) -> {
+                    writer.headers().set("Content-Type", "text/plain");
+                    writer.write("User profile");
                 });
 
         var router = new Router()
-                .add(HttpMethod.GET, "/", (writer, request) -> {
-                    var body = "Hello, World!".getBytes(StandardCharsets.UTF_8);
-                    writer.write(new HttpResponse(
-                            request.version(),
-                            HttpStatus.OK,
-                            new HttpHeaders()
-                                    .add("Content-Type", "text/plain")
-                                    .add("Content-Length", String.valueOf(body.length)),
-                            body
-                    ));
+                .add(HttpMethod.GET, "/", (writer, _) -> {
+                    writer.headers().set("Content-Type", "text/plain");
+                    writer.write("Hello, World!");
                 })
                 .add(HttpMethod.GET, "/static/", staticFileHandler)
-                .add(HttpMethod.GET, "/time", (writer, request) -> {
-                    var now = LocalDateTime.now()
-                            .format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+                .add(HttpMethod.GET, "/time", (writer, _) -> {
+                    var now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+                    var body = "{\"time\":\"" + now + "\"}";
 
-                    var body = ("{\"time\":\"" + now + "\"}").getBytes(StandardCharsets.UTF_8);
-
-                    var headers = new HttpHeaders()
-                            .add("Content-Type", "application/json")
-                            .add("Content-Length", String.valueOf(body.length));
-
-                    writer.write(new HttpResponse(request.version(), HttpStatus.OK, headers, body));
+                    writer.headers().set("Content-Type", "application/json");
+                    writer.write(body);
                 })
                 .mount("/users", usersRouter);
 

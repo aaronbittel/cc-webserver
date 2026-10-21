@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class TestUtils {
 
     static final HttpHandler NO_OP_HANDLER = (_, _) -> {};
-    static final ResponseWriter NO_OP_RESPONSE_WRITER = _ -> {};
 
     static class RecordingHandler implements HttpHandler {
         private HttpRequest received;
@@ -29,7 +28,7 @@ public class TestUtils {
     }
 
     static void assertStatus(HttpResponseRecorder recorder, HttpStatus expected) {
-        assertThat(recorder.response().status()).isEqualTo(expected);
+        assertThat(recorder.result().status()).isEqualTo(expected);
     }
 
     static void assertWasCalled(RecordingHandler recordingHandler) {
@@ -48,7 +47,7 @@ public class TestUtils {
         var headers = new HttpHeaders();
 
         for (int i = 0; i < pairs.length; i += 2) {
-            headers.add(pairs[i], pairs[i + 1]);
+            headers.set(pairs[i], pairs[i + 1]);
         }
 
         return headers;
@@ -60,5 +59,22 @@ public class TestUtils {
                 new HttpHeaders(),
                 new byte[0]
         );
+    }
+
+    static class NoOpResponseWriter implements ResponseWriter {
+
+        @Override
+        public void setStatus(HttpStatus status) {}
+
+        @Override
+        public HttpHeaders headers() {
+            return null;
+        }
+
+        @Override
+        public void write(String text) {}
+
+        @Override
+        public void write(byte[] data) {}
     }
 }

@@ -11,7 +11,7 @@ public class HttpHeaders implements Iterable<Map.Entry<String, String>> {
 
     private final Map<String, String> headers = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
-    public HttpHeaders add(String key, String value) {
+    public HttpHeaders set(String key, String value) {
         if (!HttpHeaderValidator.isValidFieldName(key)) {
             throw new IllegalArgumentException("Illegal field name");
         }

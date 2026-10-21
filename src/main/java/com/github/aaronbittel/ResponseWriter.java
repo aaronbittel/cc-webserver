@@ -4,5 +4,11 @@ import java.io.IOException;
 
 public interface ResponseWriter {
 
-    void write(HttpResponse response) throws IOException;
+    void setStatus(HttpStatus status);
+
+    HttpHeaders headers();
+
+    void write(String text) throws IOException;
+
+    void write(byte[] data) throws IOException;
 }

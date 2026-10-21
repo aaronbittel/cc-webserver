@@ -72,21 +72,16 @@ public class HttpServer implements AutoCloseable {
         } catch (IllegalArgumentException e) {
             log.warning("Invalid HTTP request: " + e.getMessage());
 
-            var writer = HttpResponseWriter.withBody(out);
-            writer.write(HttpResponses.badRequest(HttpVersion.HTTP_1_1));
+            var writer = HttpResponseWriter.forMalformedRequest();
+            HttpResponses.badRequest(writer);
             return;
-        }
-
-        ResponseWriter writer;
-        if (request.method() == HttpMethod.HEAD) {
-            writer = HttpResponseWriter.withoutBody(out);
-        } else {
-            writer = HttpResponseWriter.withBody(out);
         }
 
         log.info("request:" + request.requestLine());
 
+        var writer = HttpResponseWriter.forRequest(request.method());
         router.handleRequest(writer, request);
+        writer.finish(out, request.version());
     }
 
     public int port() {

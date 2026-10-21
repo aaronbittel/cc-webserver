@@ -139,10 +139,9 @@ public class Router implements HttpHandler {
         switch (resolveRequest(request)) {
             case RoutingResult.Dispatch(var handler) -> handler.handleRequest(writer, request);
             case RoutingResult.MethodNotAllowed(var allowedMethods) ->
-                    writer.write(HttpResponses.methodNotAllowed(request.version(), allowedMethods));
-            case RoutingResult.NotFound() -> writer.write(HttpResponses.notFound(request.version()));
-            case RoutingResult.Redirect(var location) ->
-                    writer.write(HttpResponses.redirect(request.version(), location));
+                    HttpResponses.methodNotAllowed(writer, allowedMethods);
+            case RoutingResult.NotFound() -> HttpResponses.notFound(writer);
+            case RoutingResult.Redirect(var location) -> HttpResponses.redirect(writer, location);
         }
     }
 

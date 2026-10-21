@@ -41,7 +41,7 @@ class StripPrefixHandlerTest {
 
         var handler = new StripPrefixHandler(recordingHandler, prefix);
 
-        handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, req);
+        handler.handleRequest(new TestUtils.NoOpResponseWriter(), req);
         assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/path");
     }
@@ -57,7 +57,7 @@ class StripPrefixHandlerTest {
     @Test
     void nested_prefix_handlers_strip_the_current_url() throws IOException {
         var handler = new StripPrefixHandler(new StripPrefixHandler(recordingHandler, "/v1"), "/api");
-        handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, TestUtils.request(HttpMethod.GET, "/api/v1/users"));
+        handler.handleRequest(new TestUtils.NoOpResponseWriter(), TestUtils.request(HttpMethod.GET, "/api/v1/users"));
 
         assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/users");
@@ -67,7 +67,7 @@ class StripPrefixHandlerTest {
     @MethodSource("prefixes")
     void path_matching_prefix_exactly_should_result_in_slash(String prefix) throws IOException {
         var handler = new StripPrefixHandler(recordingHandler, prefix);
-        handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, TestUtils.request(HttpMethod.GET, prefix));
+        handler.handleRequest(new TestUtils.NoOpResponseWriter(), TestUtils.request(HttpMethod.GET, prefix));
 
         assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/");
@@ -80,7 +80,7 @@ class StripPrefixHandlerTest {
 
         var handler = new StripPrefixHandler(recordingHandler, prefix);
 
-        handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, request);
+        handler.handleRequest(new TestUtils.NoOpResponseWriter(), request);
 
         assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/users");
@@ -93,7 +93,7 @@ class StripPrefixHandlerTest {
         var request = TestUtils.request(HttpMethod.GET, "/prefix/users?");
         var handler = new StripPrefixHandler(recordingHandler, "/prefix");
 
-        handler.handleRequest(TestUtils.NO_OP_RESPONSE_WRITER, request);
+        handler.handleRequest(new TestUtils.NoOpResponseWriter(), request);
 
         assertThat(recordingHandler.wasCalled()).isTrue();
         assertThat(recordingHandler.received().path()).isEqualTo("/users");

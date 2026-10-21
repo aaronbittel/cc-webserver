@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 
 public record StaticFileHandler(Path root) implements HttpHandler {
 
@@ -25,37 +26,19 @@ public record StaticFileHandler(Path root) implements HttpHandler {
 
     private static final String HTML_TEMPLATE = loadHtml();
 
-    private static final String HTML_CONTENT_TYPE = "text/html";
-    private static final String BINARY_CONTENT_TYPE = "application/octet-stream";
-
     @Override
     public void handleRequest(ResponseWriter writer, HttpRequest request) throws IOException {
-        switch (request.method()) {
-            case GET -> handleGet(writer, request);
-            case HEAD -> handleHead(writer, request);
-            default -> throw new IllegalStateException("Must be GET or HEAD");
-        }
-    }
-
-    private void handleGet(ResponseWriter writer, HttpRequest request) throws IOException {
         switch (resolveResource(request)) {
-            case ResolvedResource.DirectoryListing directoryListing -> {
-                var content = renderDirectoryListing(directoryListing.path());
-                writeString(writer, request, content);
+            case ResolvedResource.DirectoryListing(var path) -> {
+                writer.headers().set("Content-Type", "text/html");
+                writer.write(renderDirectoryListing(path));
             }
-            case ResolvedResource.FileResource fileResource -> writeFile(writer, request, fileResource.path());
-            case ResolvedResource.NotFound _ -> writer.write(HttpResponses.notFound(request.version()));
-        }
-    }
-
-    private void handleHead(ResponseWriter writer, HttpRequest request) throws IOException {
-        switch (resolveResource(request)) {
-            case ResolvedResource.DirectoryListing directoryListing -> {
-                var content = renderDirectoryListing(directoryListing.path());
-                writeStringHeaders(writer, request, content);
+            case ResolvedResource.FileResource(var path) -> {
+                var contentType = Objects.requireNonNullElse(Files.probeContentType(path), "application/octet-stream");
+                writer.headers().set("Content-Type", contentType);
+                writer.write(Files.readAllBytes(path));
             }
-            case ResolvedResource.FileResource fileResource -> writeFileHeaders(writer, request, fileResource.path());
-            case ResolvedResource.NotFound _ -> writer.write(HttpResponses.notFound(request.version()));
+            case ResolvedResource.NotFound _ -> HttpResponses.notFound(writer);
         }
     }
 
@@ -77,49 +60,6 @@ public record StaticFileHandler(Path root) implements HttpHandler {
         }
 
         return new ResolvedResource.NotFound();
-    }
-
-    void writeFile(ResponseWriter writer, HttpRequest request, Path path) throws IOException {
-        var content = Files.readAllBytes(path);
-        var headers = createFileHeaders(path);
-        writer.write(new HttpResponse(request.version(), HttpStatus.OK, headers, content));
-    }
-
-    void writeFileHeaders(ResponseWriter writer, HttpRequest request, Path path) throws IOException {
-        var headers = createFileHeaders(path);
-        var response = new HttpResponse(request.version(), HttpStatus.OK, headers);
-        writer.write(response);
-    }
-
-    void writeString(ResponseWriter writer, HttpRequest request, String content) throws IOException {
-        var data = content.getBytes(StandardCharsets.UTF_8);
-        var contentLength = data.length;
-        var headers = createFileHeaders(contentLength, HTML_CONTENT_TYPE);
-        writer.write(new HttpResponse(request.version(), HttpStatus.OK, headers, data));
-    }
-
-    void writeStringHeaders(ResponseWriter writer, HttpRequest request, String content) throws IOException {
-        var contentLength = content.getBytes(StandardCharsets.UTF_8).length;
-        var headers = createFileHeaders(contentLength, HTML_CONTENT_TYPE);
-        var response = new HttpResponse(request.version(), HttpStatus.OK, headers);
-        writer.write(response);
-    }
-
-    HttpHeaders createFileHeaders(long contentLength, String contentType) {
-        var headers = new HttpHeaders();
-        headers.add("Content-Length", String.valueOf(contentLength));
-        headers.add("Content-Type", contentType);
-        return headers;
-    }
-
-    private HttpHeaders createFileHeaders(Path path) throws IOException {
-        String contentType = Files.probeContentType(path);
-
-        if (contentType == null) {
-            contentType = BINARY_CONTENT_TYPE;
-        }
-
-        return createFileHeaders(Files.size(path), contentType);
     }
 
     String renderDirectoryListing(Path directory) throws IOException {

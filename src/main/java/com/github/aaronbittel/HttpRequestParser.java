@@ -63,7 +63,7 @@ public class HttpRequestParser {
             }
             var fieldValue = parseFieldValue(parts[1]);
 
-            headers.add(fieldName, fieldValue);
+            headers.set(fieldName, fieldValue);
         }
 
         return headers;
@@ -91,8 +91,8 @@ public class HttpRequestParser {
     }
 
     /**
-     * Reads bytes from the input stream until the next CRLF (`\r\n`) is encountered
-     * and returns the decoded line without the trailing CRLF.
+     * Reads bytes from the input stream until the next CRLF (`\r\n`) is encountered and returns the decoded line
+     * without the trailing CRLF.
      *
      * @param in the input stream to read from
      * @return the line without the trailing CRLF
