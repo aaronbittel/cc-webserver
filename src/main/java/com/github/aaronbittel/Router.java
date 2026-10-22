@@ -39,7 +39,7 @@ public class Router implements HttpHandler {
     private final Map<String, Map<HttpMethod, HttpHandler>> exactRoutes = new HashMap<>();
     private final Map<String, Map<HttpMethod, HttpHandler>> subtreeRoutes = new HashMap<>();
     private final Map<String, HttpHandler> mountRoutes = new HashMap<>();
-    private final Map<RoutePattern.ParameterRoute, Map<HttpMethod, HttpHandler>> parameterRoutes = new HashMap<>();
+    private final Map<String, RegisteredParameterRoute> parameterRoutes = new HashMap<>();
 
     private static final String TERMINAL_WILDCARD_PATTERN = "/{$}";
 
@@ -80,11 +80,12 @@ public class Router implements HttpHandler {
                 registerRoute(subtreeRoutes, route, handler, method);
             }
             case RoutePattern.ParameterRoute parameterRoute -> {
-                // TODO: check conflicts
+                var key = parameterRoute.canonical();
 
-                var methods = parameterRoutes.computeIfAbsent(parameterRoute, _ -> new HashMap<>());
-                if (methods.putIfAbsent(method, handler) != null) {
-                    throw new IllegalArgumentException("Route already registered: " + method + " " + path);
+                var route = parameterRoutes.computeIfAbsent(key, _ -> new RegisteredParameterRoute(parameterRoute, new HashMap<>()));
+                if (route.handlers().putIfAbsent(method, handler) != null) {
+                    throw new IllegalArgumentException("Duplicate route: %s conflicts with %s"
+                            .formatted(path, parameterRoutes.get(key).route().path()));
                 }
             }
         }
@@ -192,14 +193,14 @@ public class Router implements HttpHandler {
 
         var requestSegments = request.path().substring(1).split("/", -1);
 
-        for (var routePattern : parameterRoutes.entrySet()) {
-            var route = routePattern.getKey();
+        for (var parameterRoute : parameterRoutes.values()) {
+            var route = parameterRoute.route();
             if (route.segments().size() != requestSegments.length) {
                 continue;
             }
 
             if (machtesParameterRoute(route, requestSegments)) {
-                return Optional.of(resolveMatchedRoute(parameterRoutes.get(route), request));
+                return Optional.of(resolveMatchedRoute(parameterRoute.handlers(), request));
             }
         }
 
@@ -511,4 +512,6 @@ public class Router implements HttpHandler {
             }
         }
     }
+
+    private record RegisteredParameterRoute(RoutePattern.ParameterRoute route, Map<HttpMethod, HttpHandler> handlers) {}
 }

@@ -418,6 +418,26 @@ public class RouterTest {
             TestUtils.assertWasCalled(parameterHandler);
             TestUtils.assertWasNotCalled(exactHandler);
         }
+
+        @Test
+        void prefers_parameter_route_over_subtree_route() throws IOException {
+            var subtreeHandler = new TestUtils.RecordingHandler();
+            router.add(HttpMethod.GET, BASE + "/", subtreeHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/1"));
+            TestUtils.assertWasCalled(parameterHandler);
+            TestUtils.assertWasNotCalled(subtreeHandler);
+        }
+
+        @Test
+        void prefers_subtree_route_without_parameter() throws IOException {
+            var subtreeHandler = new TestUtils.RecordingHandler();
+            router.add(HttpMethod.GET, BASE + "/", subtreeHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/"));
+            TestUtils.assertWasCalled(subtreeHandler);
+            TestUtils.assertWasNotCalled(parameterHandler);
+        }
     }
 
     @Nested
@@ -431,8 +451,9 @@ public class RouterTest {
 
         @Test
         void rejects_duplicate_route_registration() {
-            assertThatIllegalArgumentException().isThrownBy(() -> new Router()
-                    .add(HttpMethod.GET, "/hello-world", TestUtils.NO_OP_HANDLER)
+            var router = new Router()
+                    .add(HttpMethod.GET, "/hello-world", TestUtils.NO_OP_HANDLER);
+            assertThatIllegalArgumentException().isThrownBy(() -> router
                     .add(HttpMethod.GET, "/hello-world", TestUtils.NO_OP_HANDLER));
         }
 
@@ -443,29 +464,30 @@ public class RouterTest {
 
         @Test
         void rejects_duplicate_mount_prefix_after_normalization() {
-            assertThatIllegalArgumentException().isThrownBy(() ->
-                    new Router()
-                            .mount("/path", new Router())
-                            .mount("/path/", new Router()));
+            var router = new Router()
+                    .mount("/path", new Router());
+            assertThatIllegalArgumentException().isThrownBy(() -> router
+                    .mount("/path/", new Router()));
         }
 
         @Test
         void rejects_conflicting_mount_and_subtree_prefixes() {
-            assertThatIllegalArgumentException().isThrownBy(() ->
-                    new Router()
-                            .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER)
-                            .mount("/path/", new Router()));
+            var router1 = new Router()
+                    .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER);
+            assertThatIllegalArgumentException().isThrownBy(() -> router1
+                    .mount("/path/", new Router()));
 
-            assertThatIllegalArgumentException().isThrownBy(() ->
-                    new Router()
-                            .mount("/path/", new Router())
-                            .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER));
+            var router2 = new Router()
+                    .mount("/path/", new Router());
+            assertThatIllegalArgumentException().isThrownBy(() -> router2
+                    .add(HttpMethod.GET, "/path/", TestUtils.NO_OP_HANDLER));
         }
 
         @Test
         void allows_different_methods_for_same_path() {
-            assertThatNoException().isThrownBy(() -> new Router()
-                    .add(HttpMethod.GET, "/hello-world", TestUtils.NO_OP_HANDLER)
+            var router = new Router()
+                    .add(HttpMethod.GET, "/hello-world", TestUtils.NO_OP_HANDLER);
+            assertThatNoException().isThrownBy(() -> router
                     .add(HttpMethod.POST, "/hello-world", TestUtils.NO_OP_HANDLER)
             );
         }
@@ -504,9 +526,31 @@ public class RouterTest {
 
         @Test
         void allows_exact_root_and_root_subtree_routes_to_coexist() {
-            assertThatNoException().isThrownBy(() -> new Router()
-                    .add(HttpMethod.GET, "/", TestUtils.NO_OP_HANDLER)
+            var router = new Router()
+                    .add(HttpMethod.GET, "/", TestUtils.NO_OP_HANDLER);
+            assertThatNoException().isThrownBy(() -> router
                     .add(HttpMethod.GET, "/{$}", TestUtils.NO_OP_HANDLER));
+        }
+
+        @Test
+        void rejects_duplicate_parameter_routes() {
+            var router = new Router()
+                    .add(HttpMethod.GET, "/users/{id}", TestUtils.NO_OP_HANDLER);
+            assertThatIllegalArgumentException().isThrownBy(() -> router
+                    .add(HttpMethod.GET, "/users/{name}", TestUtils.NO_OP_HANDLER));
+        }
+
+        @Test
+        void allows_duplicate_parameter_routes_with_different_methods() {
+            var router1 = new Router()
+                    .add(HttpMethod.GET, "/users/{id}", TestUtils.NO_OP_HANDLER);
+            assertThatNoException().isThrownBy(() -> router1
+                    .add(HttpMethod.POST, "/users/{name}", TestUtils.NO_OP_HANDLER));
+
+            var router2 = new Router()
+                    .add(HttpMethod.GET, "/users/{id}", TestUtils.NO_OP_HANDLER);
+            assertThatNoException().isThrownBy(() -> router2
+                    .add(HttpMethod.POST, "/users/{id}", TestUtils.NO_OP_HANDLER));
         }
     }
 }

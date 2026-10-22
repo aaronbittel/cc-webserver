@@ -3,6 +3,7 @@ package com.github.aaronbittel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
 
 final class RoutePatternParser {
 
@@ -130,7 +131,19 @@ sealed interface RoutePattern {
 
     record SubtreeRoute(String path) implements RoutePattern {}
 
-    record ParameterRoute(String path, List<RouteSegment> segments) implements RoutePattern {}
+    record ParameterRoute(String path, List<RouteSegment> segments) implements RoutePattern {
+
+        public String canonical() {
+            return "/" + segments.stream()
+                    .map(segment -> switch (segment) {
+                        case RouteSegment.Literal(var value) -> value;
+                        case RouteSegment.Parameter(var _) -> "{}";
+                        case RouteSegment.TerminalWildcard _ -> throw new IllegalStateException(
+                                "Parameter Route must not contain a Terminal Wildcard");
+                    })
+                    .collect(Collectors.joining("/"));
+        }
+    }
 }
 
 sealed interface RouteSegment {
