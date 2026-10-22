@@ -8,11 +8,19 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * An HTTP router that dispatches requests to handlers registered for exact paths, subtree paths, or mounted routers.
+ * An HTTP router that dispatches requests to handlers registered for exact paths, subtree paths, parameterized paths,
+ * or mounted routers.
  *
- * <p>Routes registered through {@link #add(HttpMethod, String, HttpHandler)} are classified by their trailing slash:
- * paths without a trailing slash are exact routes, while paths with a trailing slash are subtree routes. A subtree
- * route matches its registered base path and all descendant paths.
+ * <p>Routes registered through {@link #add(HttpMethod, String, HttpHandler)} are classified by their pattern:
+ * paths without a trailing slash are exact routes, paths with a trailing slash are subtree routes, and paths
+ * containing a path parameter such as {@code /users/{id}} are parameter routes. A subtree route matches its
+ * registered base path and all descendant paths. A parameter route matches requests with the same path structure,
+ * capturing the corresponding path segment as a parameter.
+ *
+ * <p>Parameter names do not affect route identity. For example, {@code /users/{id}} and {@code /users/{name}}
+ * represent the same parameter route and cannot be registered separately for the same HTTP method. Different HTTP
+ * methods may be registered for the same parameter route. The parameter names from the first registration are
+ * retained for request matching and parameter extraction.
  *
  * <p>Routers can also be mounted through {@link #mount(String, Router)}. A mount delegates matching requests to
  * another router after stripping the mount prefix from the request path.
@@ -50,11 +58,18 @@ public class Router implements HttpHandler {
      * {@code /} registers a subtree route, matching its base path and all descendant paths. The path {@code /}
      * registers a subtree route matching all paths.
      *
+     * <p>A path containing a parameter segment in braces, such as {@code /users/{id}}, registers a parameter route.
+     * A parameter matches one non-empty path segment. Parameter routes are identified by their path structure rather
+     * than their parameter names. For example, {@code /users/{id}} and {@code /users/{name}} represent the same route.
+     * Registering the same parameter route for the same HTTP method more than once is rejected, while registering
+     * different HTTP methods for that route is allowed. The parameter names from the first registration are retained.
+     *
      * <p>The terminal wildcard pattern {@code {$}} registers an exact route. The wildcard is removed before
      * registration, so {@code /users/{$}} registers an exact route for {@code /users}, and {@code /{$}} registers an
      * exact route for {@code /}.
      *
-     * <p>The terminal wildcard must be the final path segment and cannot be followed by a trailing slash.
+     * <p>The terminal wildcard must be the final path segment and cannot be followed by a trailing slash. Path
+     * parameters must also be the final segment and cannot be followed by a trailing slash.
      *
      * <p>An exact route and a subtree route may coexist for the same logical base path. For example, {@code /users}
      * and {@code /users/} are distinct registrations. An exact route takes precedence for its exact path.
@@ -63,8 +78,8 @@ public class Router implements HttpHandler {
      * the same prefix as a mount.
      *
      * @param method  the HTTP method to register
-     * @param path    the route pattern; must start with {@code /} and contain no empty, {@code .}, or {@code ..} path
-     *                segments
+     * @param path    the route pattern; must start with {@code /} and contain no empty, {@code .}, or {@code ..} literal
+     *                path segments
      * @param handler the handler invoked when the route matches and supports the request method
      * @return this router instance, allowing method chaining
      * @throws IllegalArgumentException if the route pattern is invalid, the method and route are already registered, or
