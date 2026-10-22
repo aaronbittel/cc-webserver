@@ -3,7 +3,6 @@ package com.github.aaronbittel;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -40,6 +39,7 @@ public class Router implements HttpHandler {
     private final Map<String, Map<HttpMethod, HttpHandler>> exactRoutes = new HashMap<>();
     private final Map<String, Map<HttpMethod, HttpHandler>> subtreeRoutes = new HashMap<>();
     private final Map<String, HttpHandler> mountRoutes = new HashMap<>();
+    private final Map<RoutePattern.ParameterRoute, Map<HttpMethod, HttpHandler>> parameterRoutes = new HashMap<>();
 
     private static final String TERMINAL_WILDCARD_PATTERN = "/{$}";
 
@@ -79,7 +79,14 @@ public class Router implements HttpHandler {
                 }
                 registerRoute(subtreeRoutes, route, handler, method);
             }
-            case RoutePattern.ParameterRoute(var name, List<RouteSegment> segments) -> {}
+            case RoutePattern.ParameterRoute parameterRoute -> {
+                // TODO: check conflicts
+
+                var methods = parameterRoutes.computeIfAbsent(parameterRoute, _ -> new HashMap<>());
+                if (methods.putIfAbsent(method, handler) != null) {
+                    throw new IllegalArgumentException("Route already registered: " + method + " " + path);
+                }
+            }
         }
 
         return this;
@@ -160,6 +167,11 @@ public class Router implements HttpHandler {
             return result.orElseThrow();
         }
 
+        result = lookupParameterRoute(request);
+        if (result.isPresent()) {
+            return result.orElseThrow();
+        }
+
         result = lookupTrailingSlashRedirect(request);
         if (result.isPresent()) {
             return result.orElseThrow();
@@ -171,6 +183,46 @@ public class Router implements HttpHandler {
         }
 
         return new RoutingResult.NotFound();
+    }
+
+    private Optional<RoutingResult> lookupParameterRoute(HttpRequest request) {
+        if (request.path().endsWith("/")) { // subtree route cant match
+            return Optional.empty();
+        }
+
+        var requestSegments = request.path().substring(1).split("/", -1);
+
+        for (var routePattern : parameterRoutes.entrySet()) {
+            var route = routePattern.getKey();
+            if (route.segments().size() != requestSegments.length) {
+                continue;
+            }
+
+            if (machtesParameterRoute(route, requestSegments)) {
+                return Optional.of(resolveMatchedRoute(parameterRoutes.get(route), request));
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private static boolean machtesParameterRoute(RoutePattern.ParameterRoute route, String[] requestSegments) {
+        for (int i = 0; i < route.segments().size(); i++) {
+            var routeSegment = route.segments().get(i);
+            var requestSegment = requestSegments[i];
+
+            switch (routeSegment) {
+                case RouteSegment.Literal(var value) -> {
+                    if (!requestSegment.equals(value)) {
+                        return false;
+                    }
+                }
+                case RouteSegment.Parameter _ -> {}
+                case RouteSegment.TerminalWildcard _ -> throw new IllegalStateException(
+                        "Paramter Routes must not conatain a Terminal Wildcard");
+            }
+        }
+        return true;
     }
 
     /**

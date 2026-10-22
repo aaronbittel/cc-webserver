@@ -373,6 +373,54 @@ public class RouterTest {
     }
 
     @Nested
+    class ParameterRouteTests {
+
+        private Router router;
+        private TestUtils.RecordingHandler parameterHandler;
+        private static final String PARAMETER_NAME = "{id}";
+        private static final String BASE = "/users";
+
+        @BeforeEach
+        void setUp() {
+            parameterHandler = new TestUtils.RecordingHandler();
+            router = new Router()
+                    .add(HttpMethod.GET, BASE + "/" + PARAMETER_NAME, parameterHandler);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "123",
+                "..",
+                ".",
+                "user-123",
+        })
+        void matches_single_path_segment(String parameter) throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/" + parameter));
+            TestUtils.assertWasCalled(parameterHandler);
+        }
+
+        @Test
+        void prefers_exact_route_over_parameter_route() throws IOException {
+            var exactHandler = new TestUtils.RecordingHandler();
+            router.add(HttpMethod.GET, BASE + "/profile", exactHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/profile"));
+            TestUtils.assertWasCalled(exactHandler);
+            TestUtils.assertWasNotCalled(parameterHandler);
+        }
+
+        @Test
+        void matches_parameter_route_when_no_exact_route_matches() throws IOException {
+            var exactHandler = new TestUtils.RecordingHandler();
+            router.add(HttpMethod.GET, BASE + "/profile", exactHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/123"));
+            TestUtils.assertWasCalled(parameterHandler);
+            TestUtils.assertWasNotCalled(exactHandler);
+        }
+    }
+
+    @Nested
     class RouteRegistrationTests {
         @Test
         void rejects_path_without_leading_slash() {
