@@ -215,6 +215,7 @@ public class Router implements HttpHandler {
             }
 
             if (machtesParameterRoute(route, requestSegments)) {
+                request.setPathValue(route.parameterName(), requestSegments[requestSegments.length - 1]);
                 return Optional.of(resolveMatchedRoute(parameterRoute.handlers(), request));
             }
         }

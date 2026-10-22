@@ -397,6 +397,7 @@ public class RouterTest {
         void matches_single_path_segment(String parameter) throws IOException {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/" + parameter));
             TestUtils.assertWasCalled(parameterHandler);
+            assertThat(parameterHandler.received().pathValue("id")).isEqualTo(parameter);
         }
 
         @Test
@@ -417,6 +418,7 @@ public class RouterTest {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/123"));
             TestUtils.assertWasCalled(parameterHandler);
             TestUtils.assertWasNotCalled(exactHandler);
+            assertThat(parameterHandler.received().pathValue("id")).isEqualTo("123");
         }
 
         @Test
@@ -427,6 +429,7 @@ public class RouterTest {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/1"));
             TestUtils.assertWasCalled(parameterHandler);
             TestUtils.assertWasNotCalled(subtreeHandler);
+            assertThat(parameterHandler.received().pathValue("id")).isEqualTo("1");
         }
 
         @Test

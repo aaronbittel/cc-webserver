@@ -64,7 +64,7 @@ final class RoutePatternParser {
                                 "Path Parameter must be the last segment: " + sourcePath);
                     }
 
-                    return new RoutePattern.ParameterRoute(sourcePath, segments);
+                    return new RoutePattern.ParameterRoute(sourcePath, segments, name);
                 }
             }
         }
@@ -131,7 +131,7 @@ sealed interface RoutePattern {
 
     record SubtreeRoute(String path) implements RoutePattern {}
 
-    record ParameterRoute(String path, List<RouteSegment> segments) implements RoutePattern {
+    record ParameterRoute(String path, List<RouteSegment> segments, String parameterName) implements RoutePattern {
 
         public String canonical() {
             return "/" + segments.stream()

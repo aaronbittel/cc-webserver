@@ -3,6 +3,8 @@ package com.github.aaronbittel;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 public class HttpRequest {
@@ -11,6 +13,7 @@ public class HttpRequest {
     private final HttpHeaders headers;
     private final byte[] body;
     private final RequestURL requestUrl;
+    private final Map<String, String> pathParameters = new HashMap<>();
 
     public HttpRequest(HttpRequestLine requestLine, HttpHeaders headers, byte[] body) {
         this.requestLine = requestLine;
@@ -24,6 +27,20 @@ public class HttpRequest {
         this.headers = headers;
         this.body = body;
         this.requestUrl = requestUrl;
+    }
+
+    public void setPathValue(String key, String value) {
+        pathParameters.put(key, value);
+    }
+
+    public String pathValue(String key) {
+        String value = pathParameters.get(key);
+
+        if (value == null) {
+            throw new IllegalArgumentException("Path parameter not found: " + key);
+        }
+
+        return value;
     }
 
     public HttpRequest withURL(RequestURL newUrl) {
