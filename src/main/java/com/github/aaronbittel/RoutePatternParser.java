@@ -25,12 +25,12 @@ final class RoutePatternParser {
             path = path.substring(0, path.length() - 1);
         }
 
-        var tokens = tokenize(path);
+        var segments = tokenize(path);
 
-        IntPredicate isLastIndex = i -> i == tokens.size() - 1;
+        IntPredicate isLastIndex = i -> i == segments.size() - 1;
 
-        for (int i = 0; i < tokens.size(); i++) {
-            switch (tokens.get(i)) {
+        for (int i = 0; i < segments.size(); i++) {
+            switch (segments.get(i)) {
                 case RouteSegment.Literal(var segment) -> {
                     if (!isValidSegment(segment)) {
                         throw new IllegalArgumentException(
@@ -48,6 +48,22 @@ final class RoutePatternParser {
                     }
 
                     return new RoutePattern.ExactRoute(pathWithoutTerminalWildcard(path));
+                }
+                case RouteSegment.Parameter(var name) -> {
+                    if (!isValidPathParameter(name)) {
+                        throw new IllegalArgumentException(
+                                "Invalid Path Parameter %s in route %s".formatted(name, sourcePath));
+                    }
+                    if (hasTrailingSlash) {
+                        throw new IllegalArgumentException(
+                                "Path Parameter is not allowed in subtree routes: " + sourcePath);
+                    }
+                    if (!isLastIndex.test(i)) {
+                        throw new IllegalArgumentException(
+                                "Path Parameter must be the last segment: " + sourcePath);
+                    }
+
+                    return new RoutePattern.ParameterRoute(sourcePath, segments);
                 }
             }
         }
@@ -81,17 +97,28 @@ final class RoutePatternParser {
 
             if (segment.equals("{$}")) {
                 tokens.add(new RouteSegment.TerminalWildcard());
-                continue;
+            } else if (segment.startsWith("{") && segment.endsWith("}")) {
+                tokens.add(new RouteSegment.Parameter(segment.substring(1, segment.length() - 1)));
+            } else {
+                tokens.add(new RouteSegment.Literal(segment));
             }
-
-            tokens.add(new RouteSegment.Literal(segment));
         }
 
         return tokens;
     }
 
     private static boolean isValidSegment(String segment) {
-        return !segment.equals(".") && !segment.equals("..");
+        if (segment.equals(".") || segment.equals("..")) {
+            return false;
+        }
+
+        return segment.matches("[a-zA-Z0-9._~-]+");
+    }
+
+    private static boolean isValidPathParameter(String name) {
+        return !name.isBlank()
+                && !name.contains("{")
+                && !name.contains("}");
     }
 }
 
@@ -102,6 +129,8 @@ sealed interface RoutePattern {
     record ExactRoute(String path) implements RoutePattern {}
 
     record SubtreeRoute(String path) implements RoutePattern {}
+
+    record ParameterRoute(String path, List<RouteSegment> segments) implements RoutePattern {}
 }
 
 sealed interface RouteSegment {
@@ -109,4 +138,6 @@ sealed interface RouteSegment {
     record Literal(String value) implements RouteSegment {}
 
     record TerminalWildcard() implements RouteSegment {}
+
+    record Parameter(String name) implements RouteSegment {}
 }
