@@ -46,11 +46,14 @@ public class Router implements HttpHandler {
      * Registers a handler for an HTTP method and path.
      *
      * <p>A path without a trailing slash registers an exact route, matching only that path. A path ending in
-     * {@code /} registers a subtree route, matching its base path and all descendant paths.
+     * {@code /} registers a subtree route, matching its base path and all descendant paths. The path {@code /}
+     * registers a subtree route matching all paths.
      *
-     * <p>The terminal wildcard pattern {@code /{$}} registers an exact route. The wildcard is removed before
+     * <p>The terminal wildcard pattern {@code {$}} registers an exact route. The wildcard is removed before
      * registration, so {@code /users/{$}} registers an exact route for {@code /users}, and {@code /{$}} registers an
      * exact route for {@code /}.
+     *
+     * <p>The terminal wildcard must be the final path segment and cannot be followed by a trailing slash.
      *
      * <p>An exact route and a subtree route may coexist for the same logical base path. For example, {@code /users}
      * and {@code /users/} are distinct registrations. An exact route takes precedence for its exact path.
@@ -59,30 +62,24 @@ public class Router implements HttpHandler {
      * the same prefix as a mount.
      *
      * @param method  the HTTP method to register
-     * @param path    the route path; must start with {@code /}
+     * @param path    the route pattern; must start with {@code /} and contain no empty, {@code .}, or {@code ..} path
+     *                segments
      * @param handler the handler invoked when the route matches and supports the request method
      * @return this router instance, allowing method chaining
-     * @throws IllegalArgumentException if the path does not start with {@code /}, the method and path are already
-     *                                  registered, or the subtree path conflicts with a mount
+     * @throws IllegalArgumentException if the route pattern is invalid, the method and route are already registered, or
+     *                                  the subtree route conflicts with a mount
      */
     public Router add(HttpMethod method, String path, HttpHandler handler) {
-        validateAddPath(path);
-
-        if (isTerminalWildcardPattern(path)) {
-            path = resolveTerminalWildcardPath(path);
-            registerRoute(exactRoutes, path, handler, method);
-            return this;
-        }
-
-        if (isSubtreePattern(path)) {
-            if (mountRoutes.containsKey(path)) {
-                throw new IllegalArgumentException("Duplicated path: " + path);
+        switch (RoutePatternParser.parse(path)) {
+            case RoutePattern.ExactRoute(var route) -> registerRoute(exactRoutes, route, handler, method);
+            case RoutePattern.SubtreeRoute(var route) -> {
+                if (mountRoutes.containsKey(route)) {
+                    throw new IllegalArgumentException("Duplicated path: " + route);
+                }
+                registerRoute(subtreeRoutes, route, handler, method);
             }
-            registerRoute(subtreeRoutes, path, handler, method);
-            return this;
         }
 
-        registerRoute(exactRoutes, path, handler, method);
         return this;
     }
 
@@ -403,30 +400,6 @@ public class Router implements HttpHandler {
     }
 
     /**
-     * Resolves a terminal wildcard pattern to its corresponding exact path.
-     *
-     * @param path the terminal wildcard pattern to resolve
-     * @return the path with the terminal wildcard pattern removed, or {@code "/"} if the resulting path is empty
-     */
-    private static String resolveTerminalWildcardPath(String path) {
-        path = path.substring(0, path.length() - TERMINAL_WILDCARD_PATTERN.length());
-        if (path.isEmpty()) {
-            path = "/";
-        }
-        return path;
-    }
-
-    /**
-     * Determines whether the given path ends with the terminal wildcard pattern.
-     *
-     * @param path the route path to check
-     * @return {@code true} if the path ends with the terminal wildcard pattern, {@code false} otherwise
-     */
-    private static boolean isTerminalWildcardPattern(String path) {
-        return path.endsWith(TERMINAL_WILDCARD_PATTERN);
-    }
-
-    /**
      * Validates that a path is non-null and starts with {@code /}.
      *
      * @param path the path to validate
@@ -435,44 +408,6 @@ public class Router implements HttpHandler {
     private static void validateAbsolutePath(String path) {
         if (path == null || !path.startsWith("/")) {
             throw new IllegalArgumentException("Path must start with '/': " + path);
-        }
-    }
-
-    /**
-     * Validates a route path before registration.
-     *
-     * <p>The path must be absolute, and the terminal wildcard pattern, if present, must appear only at the end.
-     *
-     * @param path the route path to validate
-     * @throws IllegalArgumentException if the path is invalid or the terminal wildcard pattern appears in an
-     *                                  unsupported position
-     */
-    private static void validateAddPath(String path) {
-        validateAbsolutePath(path);
-        validateWildcardPattern(path);
-    }
-
-    /**
-     * Validates the position of the terminal wildcard pattern in a route path.
-     *
-     * <p>If present, the pattern must occur at the end of the path.
-     *
-     * @param path the route path to validate
-     * @throws IllegalArgumentException if the terminal wildcard pattern appears before the end of the path
-     */
-    private static void validateWildcardPattern(String path) {
-        int wildcardIndex = path.indexOf(TERMINAL_WILDCARD_PATTERN);
-        if (wildcardIndex < 0) {
-            return;
-        }
-
-        var expectedWildcardIndex = path.length() - TERMINAL_WILDCARD_PATTERN.length();
-        if (expectedWildcardIndex < 0) {
-            return;
-        }
-
-        if (wildcardIndex != expectedWildcardIndex) {
-            throw new IllegalArgumentException("Terminal wildcard pattern must appear at the end: " + path);
         }
     }
 
