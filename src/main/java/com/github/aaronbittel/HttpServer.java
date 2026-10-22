@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -15,9 +16,12 @@ public class HttpServer implements AutoCloseable {
     private static final Logger log = Logger.getLogger(HttpServer.class.getName());
 
     private static final int BACKLOG = 5;
+    private static final int DEFAULT_REQUEST_TIMEOUT_MILLIS = 5_000;
 
     private volatile ServerSocket serverSocket;
     private final Router router;
+
+    private int requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MILLIS;
 
     public HttpServer(Router router) {
         this.router = router;
@@ -29,9 +33,9 @@ public class HttpServer implements AutoCloseable {
     }
 
     void bind(InetAddress address, int port) throws IOException {
-        this.serverSocket = new ServerSocket();
-        this.serverSocket.setReuseAddress(true);
-        this.serverSocket.bind(new InetSocketAddress(address, port), BACKLOG);
+        serverSocket = new ServerSocket();
+        serverSocket.setReuseAddress(true);
+        serverSocket.bind(new InetSocketAddress(address, port), BACKLOG);
     }
 
     void serve() throws IOException {
@@ -60,6 +64,8 @@ public class HttpServer implements AutoCloseable {
     }
 
     private void handleConnection(Socket client) throws IOException {
+        client.setSoTimeout(requestTimeoutMillis);
+
         log.info("accepted client: " + client.getLocalSocketAddress());
 
         var parser = new HttpRequestParser(new BufferedInputStream(client.getInputStream()));
@@ -74,6 +80,15 @@ public class HttpServer implements AutoCloseable {
 
             var writer = HttpResponseWriter.forMalformedRequest();
             HttpResponses.badRequest(writer);
+            writer.finish(out, HttpVersion.HTTP_1_1);
+            return;
+        } catch (SocketTimeoutException e) {
+            log.warning("Socket timeout: " + e.getMessage());
+
+            var writer = HttpResponseWriter.forMalformedRequest();
+            writer.headers().set("Connection", "close");
+            writer.setStatus(HttpStatus.REQUEST_TIMEOUT);
+            writer.finish(out, HttpVersion.HTTP_1_1);
             return;
         }
 
@@ -97,5 +112,9 @@ public class HttpServer implements AutoCloseable {
         if (serverSocket != null) {
             serverSocket.close();
         }
+    }
+
+    public void setRequestTimeoutMillis(int requestTimeoutMillis) {
+        this.requestTimeoutMillis = requestTimeoutMillis;
     }
 }

@@ -27,6 +27,7 @@ public final class HttpResponses {
     }
 
     public static void badRequest(ResponseWriter writer) {
+        writer.headers().set("Connection", "close");
         writer.setStatus(HttpStatus.BAD_REQUEST);
     }
 }

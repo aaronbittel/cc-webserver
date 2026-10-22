@@ -19,9 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,9 +38,7 @@ public class StaticFileHandlerE2ETests {
             .connectTimeout(Duration.ofSeconds(1))
             .build();
 
-    private HttpServer server;
-    private ExecutorService executor;
-    private Future<?> serveFuture;
+    private TestHttpServer server;
 
     @BeforeAll
     static void set_log_level_to_warning() {
@@ -55,30 +51,26 @@ public class StaticFileHandlerE2ETests {
         Router router = new Router()
                 .add(HttpMethod.GET, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"));
 
-        server = new HttpServer(router);
-        server.bind(InetAddress.getLoopbackAddress(), 0);
-
-        executor = Executors.newSingleThreadExecutor();
-
-        serveFuture = executor.submit(() -> {
-            server.serve();
-            return null;
-        });
+        server = new TestHttpServer(router);
     }
 
     @AfterEach
     void tearDownServer() throws IOException {
-        if (server != null) {
-            server.close();
-        }
-
-        if (executor != null) {
-            executor.close();
-        }
+        server.close();
     }
 
     @Test
     void server_shutdown_is_handled_gracefully() throws IOException, InterruptedException {
+        var server = new HttpServer(new Router());
+        server.bind(InetAddress.getLoopbackAddress(), 0);
+
+        var executor = Executors.newSingleThreadExecutor();
+
+        var serveFuture = executor.submit(() -> {
+            server.serve();
+            return null;
+        });
+
         get("/"); // ensure executor started server
         server.close();
 

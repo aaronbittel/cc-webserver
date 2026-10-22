@@ -4,6 +4,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class HttpResponseWriter implements ResponseWriter {
 
@@ -52,6 +55,7 @@ public class HttpResponseWriter implements ResponseWriter {
         var body = buffer.toByteArray();
 
         var headers = headers();
+        headers.set("Date", ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME));
         if (body.length > 0) {
             headers.set("Content-Length", String.valueOf(body.length));
         }
