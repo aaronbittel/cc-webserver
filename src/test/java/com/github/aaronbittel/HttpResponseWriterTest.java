@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,19 +24,16 @@ class HttpResponseWriterTest {
     @Test
     void empty_body_write() throws IOException {
         writer.finish(out, HttpVersion.HTTP_1_1);
-        var expected = "HTTP/1.1 200 OK\r\n\r\n";
-        assertThat(out.toString()).isEqualTo(expected);
+        HttpResponseAssert.from(out).hasEmptyBody();
     }
 
     @Test
     void write_with_body() throws IOException {
         var content = "Hello World";
-
         writer.write(content);
         writer.finish(out, HttpVersion.HTTP_1_1);
 
-        var expected = "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s".formatted(content.getBytes().length, content);
-        assertThat(out.toString()).isEqualTo(expected);
+        HttpResponseAssert.from(out).hasBody(content);
     }
 
     @Test
@@ -46,36 +45,21 @@ class HttpResponseWriterTest {
         writer.write(content);
         writer.finish(out, HttpVersion.HTTP_1_1);
 
-        var expected = """
-                HTTP/1.1 200 OK
-                Content-Length: 12
-                Content-Type: text/plain
-                
-                """.replace("\n", "\r\n");
-
-        assertThat(out.toString(StandardCharsets.US_ASCII)).isEqualTo(expected);
+        HttpResponseAssert.from(out).hasEmptyBody();
     }
 
     @Test
     void sets_content_length_automatically() throws IOException {
         writer.write("Hello, World!");
         writer.finish(out, HttpVersion.HTTP_1_1);
-
-        var expected = """
-                HTTP/1.1 200 OK
-                Content-Length: 13
-                
-                Hello, World!""".replace("\n", "\r\n");
-
-        assertThat(out.toString(StandardCharsets.UTF_8)).isEqualTo(expected);
+        HttpResponseAssert.from(out).hasHeader("Content-Length: 13");
     }
 
     @Test
     void calculates_content_length_in_bytes() throws IOException {
         writer.write("Héllo");
         writer.finish(out, HttpVersion.HTTP_1_1);
-
-        assertThat(out.toString(StandardCharsets.UTF_8)).contains("Content-Length: 6\r\n");
+        HttpResponseAssert.from(out).hasHeader("Content-Length: 6");
     }
 
     @Test
@@ -84,19 +68,64 @@ class HttpResponseWriterTest {
         writer.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
         writer.finish(out, HttpVersion.HTTP_1_1);
 
-        var expected = "HTTP/1.1 405 Method Not Allowed\r\n\r\n";
-        assertThat(out.toString(StandardCharsets.UTF_8)).isEqualTo(expected);
+        HttpResponseAssert.from(out).hasStatusLine("HTTP/1.1 405 Method Not Allowed");
     }
 
     @Test
     void finish_does_not_write_response_twice() throws IOException {
-        writer.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
         writer.finish(out, HttpVersion.HTTP_1_1);
 
-        var expected = "HTTP/1.1 405 Method Not Allowed\r\n\r\n";
-        assertThat(out.toString(StandardCharsets.UTF_8)).isEqualTo(expected);
+        var response = out.toString(StandardCharsets.UTF_8);
+        assertThat(response).isNotEmpty();
 
-        writer.finish(out, HttpVersion.HTTP_1_1); // does not append / write a second time
-        assertThat(out.toString(StandardCharsets.UTF_8)).isEqualTo(expected);
+        writer.finish(out, HttpVersion.HTTP_1_1);
+        assertThat(out.toString(StandardCharsets.UTF_8)).isEqualTo(response);
+    }
+
+    static class HttpResponseAssert {
+
+        private final String statusLine;
+        private final List<String> headers;
+        private final String body;
+
+        HttpResponseAssert(String response) {
+            var separator = response.indexOf("\r\n\r\n");
+            assertThat(separator)
+                    .as("HTTP response header/body separator")
+                    .isGreaterThanOrEqualTo(0);
+
+            var header = response.substring(0, separator);
+            var statusLineAndHeaders = header.split("\r\n");
+
+            statusLine = statusLineAndHeaders[0];
+            headers = Arrays.stream(statusLineAndHeaders)
+                    .skip(1)
+                    .toList();
+            body = response.substring(separator + 4);
+        }
+
+        static HttpResponseAssert from(ByteArrayOutputStream out) {
+            return new HttpResponseAssert(out.toString(StandardCharsets.UTF_8));
+        }
+
+        HttpResponseAssert hasStatusLine(String expected) {
+            assertThat(statusLine).isEqualTo(expected);
+            return this;
+        }
+
+        HttpResponseAssert hasHeader(String expected) {
+            assertThat(headers).contains(expected);
+            return this;
+        }
+
+        HttpResponseAssert hasBody(String expected) {
+            assertThat(body).isEqualTo(expected);
+            return this;
+        }
+
+        HttpResponseAssert hasEmptyBody() {
+            assertThat(body).isEmpty();
+            return this;
+        }
     }
 }

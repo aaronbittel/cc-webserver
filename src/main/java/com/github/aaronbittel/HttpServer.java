@@ -9,6 +9,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -16,12 +17,14 @@ public class HttpServer implements AutoCloseable {
     private static final Logger log = Logger.getLogger(HttpServer.class.getName());
 
     private static final int BACKLOG = 5;
-    private static final int DEFAULT_REQUEST_TIMEOUT_MILLIS = 5_000;
+    private static final Duration DEFAULT_SOCKET_READ_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration DEFAULT_REQUEST_PARSING_TIMEOUT = Duration.ofSeconds(10);
 
     private volatile ServerSocket serverSocket;
     private final Router router;
 
-    private int requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MILLIS;
+    private Duration socketReadTimeout = DEFAULT_SOCKET_READ_TIMEOUT;
+    private Duration requestParsingTimeout = DEFAULT_REQUEST_PARSING_TIMEOUT;
 
     public HttpServer(Router router) {
         this.router = router;
@@ -64,11 +67,12 @@ public class HttpServer implements AutoCloseable {
     }
 
     private void handleConnection(Socket client) throws IOException {
-        client.setSoTimeout(requestTimeoutMillis);
+        client.setSoTimeout(Math.toIntExact(socketReadTimeout.toMillis()));
 
         log.info("accepted client: " + client.getLocalSocketAddress());
 
-        var parser = new HttpRequestParser(new BufferedInputStream(client.getInputStream()));
+        var in = new BufferedInputStream(client.getInputStream());
+        var parser = new HttpRequestParser(new DeadlineInputStream(client, in, System.nanoTime() + requestParsingTimeout.toNanos()));
         var out = new BufferedOutputStream(client.getOutputStream());
 
         HttpRequest request;
@@ -114,7 +118,11 @@ public class HttpServer implements AutoCloseable {
         }
     }
 
-    public void setRequestTimeoutMillis(int requestTimeoutMillis) {
-        this.requestTimeoutMillis = requestTimeoutMillis;
+    public void setSocketReadTimeout(Duration socketReadTimeout) {
+        this.socketReadTimeout = socketReadTimeout;
+    }
+
+    public void setRequestParsingTimeout(Duration requestParsingTimeout) {
+        this.requestParsingTimeout = requestParsingTimeout;
     }
 }

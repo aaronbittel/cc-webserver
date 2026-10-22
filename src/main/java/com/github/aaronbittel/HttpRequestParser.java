@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 public class HttpRequestParser {
+
     private final InputStream in;
 
     private static final String CRLF = "\r\n";
