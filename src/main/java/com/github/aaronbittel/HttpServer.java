@@ -10,6 +10,8 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,6 +24,7 @@ public class HttpServer implements AutoCloseable {
 
     private volatile ServerSocket serverSocket;
     private final Router router;
+    private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
 
     private Duration socketReadTimeout = DEFAULT_SOCKET_READ_TIMEOUT;
     private Duration requestParsingTimeout = DEFAULT_REQUEST_PARSING_TIMEOUT;
@@ -48,19 +51,20 @@ public class HttpServer implements AutoCloseable {
                 serverSocket.getInetAddress().getHostAddress(),
                 serverSocket.getLocalPort()));
 
-        try {
-            while (!serverSocket.isClosed()) {
+        while (!serverSocket.isClosed()) {
+            try {
                 var client = serverSocket.accept();
-                Thread.ofVirtual().start(() -> {
+                executorService.submit(() -> {
                     try (client) {
                         handleConnection(client);
                     } catch (IOException e) {
                         log.log(Level.WARNING, "Client connection failed", e);
                     }
                 });
-            }
-        } catch (SocketException e) {
-            if (!serverSocket.isClosed()) {
+            } catch (SocketException e) {
+                if (serverSocket.isClosed()) {
+                    break; // server shutdown
+                }
                 throw e;
             }
         }
@@ -83,7 +87,7 @@ public class HttpServer implements AutoCloseable {
             log.warning("Invalid HTTP request: " + e.getMessage());
 
             var writer = HttpResponseWriter.forMalformedRequest();
-            HttpResponses.badRequest(writer);
+            HttpResponses.badRequestAndCloseConnection(writer);
             writer.finish(out, HttpVersion.HTTP_1_1);
             return;
         } catch (SocketTimeoutException e) {
