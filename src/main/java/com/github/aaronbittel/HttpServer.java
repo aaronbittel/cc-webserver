@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
@@ -19,18 +20,22 @@ public class HttpServer implements AutoCloseable {
     private static final Logger log = Logger.getLogger(HttpServer.class.getName());
 
     private static final int BACKLOG = 5;
-    private static final Duration DEFAULT_SOCKET_READ_TIMEOUT = Duration.ofSeconds(5);
-    private static final Duration DEFAULT_REQUEST_PARSING_TIMEOUT = Duration.ofSeconds(10);
 
     private volatile ServerSocket serverSocket;
     private final Router router;
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
 
-    private Duration socketReadTimeout = DEFAULT_SOCKET_READ_TIMEOUT;
-    private Duration requestParsingTimeout = DEFAULT_REQUEST_PARSING_TIMEOUT;
+    private final Duration socketReadTimeout;
+    private final Duration requestParsingTimeout;
 
-    public HttpServer(Router router) {
-        this.router = router;
+    private static final Duration DEFAULT_SOCKET_READ_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration DEFAULT_REQUEST_PARSING_TIMEOUT = Duration.ofSeconds(10);
+
+    private HttpServer(Builder builder) {
+        Objects.requireNonNull(builder);
+        this.router = builder.router;
+        this.socketReadTimeout = builder.socketReadTimeout;
+        this.requestParsingTimeout = builder.requestParsingTimeout;
     }
 
     public void start(InetAddress address, int port) throws IOException {
@@ -122,11 +127,28 @@ public class HttpServer implements AutoCloseable {
         }
     }
 
-    public void setSocketReadTimeout(Duration socketReadTimeout) {
-        this.socketReadTimeout = socketReadTimeout;
-    }
+    public static class Builder {
 
-    public void setRequestParsingTimeout(Duration requestParsingTimeout) {
-        this.requestParsingTimeout = requestParsingTimeout;
+        private final Router router;
+        private Duration socketReadTimeout = DEFAULT_SOCKET_READ_TIMEOUT;
+        private Duration requestParsingTimeout = DEFAULT_REQUEST_PARSING_TIMEOUT;
+
+        public Builder(Router router) {
+            this.router = Objects.requireNonNull(router);
+        }
+
+        public Builder socketReadTimeout(Duration socketReadTimeout) {
+            this.socketReadTimeout = Objects.requireNonNull(socketReadTimeout);
+            return this;
+        }
+
+        public Builder requestParsingTimeout(Duration requestParsingTimeout) {
+            this.requestParsingTimeout = Objects.requireNonNull(requestParsingTimeout);
+            return this;
+        }
+
+        public HttpServer build() {
+            return new HttpServer(this);
+        }
     }
 }

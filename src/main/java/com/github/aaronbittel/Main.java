@@ -53,7 +53,7 @@ public class Main {
                 })
                 .mount("/users", usersRouter);
 
-        try (var server = new HttpServer(router)) {
+        try (var server = new HttpServer.Builder(router).build()) {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 System.out.println("Shutting down server...");
                 try {

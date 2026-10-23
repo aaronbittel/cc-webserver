@@ -51,7 +51,7 @@ public class StaticFileHandlerE2ETests {
         Router router = new Router()
                 .add(HttpMethod.GET, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"));
 
-        server = new TestHttpServer(router);
+        server = new TestHttpServer(new HttpServer.Builder(router));
     }
 
     @AfterEach
@@ -61,7 +61,7 @@ public class StaticFileHandlerE2ETests {
 
     @Test
     void server_shutdown_is_handled_gracefully() throws IOException, InterruptedException {
-        var server = new HttpServer(new Router());
+        var server = new HttpServer.Builder(new Router()).build();
         server.bind(InetAddress.getLoopbackAddress(), 0);
 
         var executor = Executors.newSingleThreadExecutor();
