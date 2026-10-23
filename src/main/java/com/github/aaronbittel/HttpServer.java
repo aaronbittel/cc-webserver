@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -75,6 +76,19 @@ public class HttpServer implements AutoCloseable {
         }
     }
 
+    private void awaitGracefulShutdown() {
+        try {
+            if (executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.info("Server shut down gracefully");
+            } else {
+                log.warning("Graceful shutdown timed out");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.log(Level.WARNING, "Interrupted while waiting for server shutdown", e);
+        }
+    }
+
     private void handleConnection(Socket client) throws IOException {
         client.setSoTimeout(Math.toIntExact(socketReadTimeout.toMillis()));
 
@@ -125,6 +139,9 @@ public class HttpServer implements AutoCloseable {
         if (serverSocket != null) {
             serverSocket.close();
         }
+
+        executorService.shutdown();
+        awaitGracefulShutdown();
     }
 
     public static class Builder {
