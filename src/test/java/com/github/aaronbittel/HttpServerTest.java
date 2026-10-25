@@ -105,7 +105,6 @@ public class HttpServerTest {
     }
 
     @Test
-    @Tag("slow")
     void after_shutdown_server_does_not_accept_new_connections() throws IOException {
         var server = new TestHttpServer(new HttpServer.Builder(new Router()));
         var port = server.port();
@@ -118,7 +117,6 @@ public class HttpServerTest {
     }
 
     @Test
-    @Tag("slow")
     void started_tasks_are_completed_after_server_shutdown() throws Exception {
         var handlerStarted = new CountDownLatch(1);
         var allowHandlerToFinish = new CountDownLatch(1);
@@ -202,6 +200,7 @@ public class HttpServerTest {
     }
 
     @Test
+    @Tag("slow")
     void closes_connection_when_client_requests_connection_close() throws IOException {
         try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
             try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
@@ -220,6 +219,27 @@ public class HttpServerTest {
                         .hasHeader("Connection: close");
 
                 assertConnectionClosed(client, Duration.ofSeconds(1));
+            }
+        }
+    }
+
+    @Test
+    @Tag("slow")
+    void closes_connection_when_idle_timeout_expires_after_successful_request() throws IOException {
+        var idleTimeout = Duration.ofSeconds(2);
+
+        try (var server = new TestHttpServer(new HttpServer.Builder(new Router())
+                .idleTimeout(idleTimeout))) {
+            try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
+                var out = client.getOutputStream();
+                var in = new BufferedInputStream(client.getInputStream());
+                out.write("GET / HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+                out.flush();
+
+                HttpResponseWriterTest.HttpResponseAssert.readFrom(in)
+                        .hasStatusLine("HTTP/1.1 404 Not Found");
+
+                assertConnectionClosed(client, idleTimeout.plusMillis(50));
             }
         }
     }

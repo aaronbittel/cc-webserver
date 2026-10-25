@@ -23,13 +23,16 @@ public class HttpServer implements AutoCloseable {
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
 
     private final Duration requestParsingTimeout;
+    private final Duration idleTimeout;
 
     private static final Duration DEFAULT_REQUEST_PARSING_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration DEFAULT_IDLE_TIMEOUT = Duration.ofSeconds(10);
 
     private HttpServer(Builder builder) {
         Objects.requireNonNull(builder);
         this.router = builder.router;
         this.requestParsingTimeout = builder.requestParsingTimeout;
+        this.idleTimeout = builder.idleTimeout;
     }
 
     public void start(InetAddress address, int port) throws IOException {
@@ -53,7 +56,7 @@ public class HttpServer implements AutoCloseable {
         while (!serverSocket.isClosed()) {
             try {
                 var client = serverSocket.accept();
-                executorService.submit(new ConnectionHandler(client, router, requestParsingTimeout));
+                executorService.submit(new ConnectionHandler(client, router, requestParsingTimeout, idleTimeout));
             } catch (SocketException e) {
                 if (serverSocket.isClosed()) {
                     break; // server shutdown
@@ -98,6 +101,7 @@ public class HttpServer implements AutoCloseable {
 
         private final Router router;
         private Duration requestParsingTimeout = DEFAULT_REQUEST_PARSING_TIMEOUT;
+        private Duration idleTimeout = DEFAULT_IDLE_TIMEOUT;
 
         public Builder(Router router) {
             this.router = Objects.requireNonNull(router);
@@ -105,6 +109,11 @@ public class HttpServer implements AutoCloseable {
 
         public Builder requestParsingTimeout(Duration requestParsingTimeout) {
             this.requestParsingTimeout = Objects.requireNonNull(requestParsingTimeout);
+            return this;
+        }
+
+        public Builder idleTimeout(Duration idleTimeout) {
+            this.idleTimeout = Objects.requireNonNull(idleTimeout);
             return this;
         }
 

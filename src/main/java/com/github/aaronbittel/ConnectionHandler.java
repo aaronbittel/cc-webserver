@@ -3,6 +3,7 @@ package com.github.aaronbittel;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.PushbackInputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
@@ -17,11 +18,13 @@ public class ConnectionHandler implements Runnable {
     private final Socket socket;
     private final Router router;
     private final Duration requestParsingTimeout;
+    private final Duration idleTimeout;
 
-    public ConnectionHandler(Socket socket, Router router, Duration requestParsingTimeout) {
+    public ConnectionHandler(Socket socket, Router router, Duration requestParsingTimeout, Duration idleTimeout) {
         this.socket = socket;
         this.router = router;
         this.requestParsingTimeout = requestParsingTimeout;
+        this.idleTimeout = idleTimeout;
     }
 
     @Override
@@ -34,7 +37,7 @@ public class ConnectionHandler implements Runnable {
     }
 
     private void handleConnection(Socket socket) throws IOException {
-        var in = new BufferedInputStream(socket.getInputStream());
+        var in = new PushbackInputStream(new BufferedInputStream(socket.getInputStream()));
         var out = new BufferedOutputStream(socket.getOutputStream());
 
         var closeConnection = false;
@@ -73,7 +76,39 @@ public class ConnectionHandler implements Runnable {
                 writer.headers().set("Connection", "close");
             }
             writer.finish(out, request.version());
+
+            if (closeConnection || !awaitNextRequest(socket, in)) {
+                break;
+            }
         }
+    }
+
+    /**
+     * Waits for the client to begin sending the next request, up to the configured idle timeout.
+     *
+     * <p> Returns {@code false} if the client closes the connection or the idle timeout expires. Returns {@code true}
+     * if at least one byte is received, restoring the byte to the input stream so that it can be consumed by the
+     * request parser.
+     *
+     * @param socket the client socket
+     * @param in     the pushback input stream used to read client requests
+     * @return {@code true} if client data is available, {@code false} if the client disconnects or the idle timeout
+     *         expires
+     * @throws IOException if an I/O error occurs while reading from the input stream
+     */
+    private boolean awaitNextRequest(Socket socket, PushbackInputStream in) throws IOException {
+        socket.setSoTimeout(Math.toIntExact(idleTimeout.toMillis()));
+        try {
+            var b = in.read();
+            if (b == -1) { // client closed connection
+                return false;
+            }
+            in.unread(b); // put read byte back into stream
+        } catch (SocketTimeoutException e) {
+            log.log(Level.FINE, "Idle timeout expired; closing connection");
+            return false;
+        }
+        return true;
     }
 
     private static boolean clientRequestsConnectionClose(HttpHeaders headers) {
