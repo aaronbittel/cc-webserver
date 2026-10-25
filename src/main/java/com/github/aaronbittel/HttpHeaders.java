@@ -28,6 +28,10 @@ public class HttpHeaders implements Iterable<Map.Entry<String, String>> {
         return Optional.ofNullable(headers.get(key));
     }
 
+    Map<String, String> headers() {
+        return Collections.unmodifiableMap(new TreeMap<>(headers));
+    }
+
     @Override
     public Iterator<Map.Entry<String, String>> iterator() {
         return headers.entrySet().iterator();
@@ -42,10 +46,6 @@ public class HttpHeaders implements Iterable<Map.Entry<String, String>> {
     @Override
     public int hashCode() {
         return Objects.hashCode(headers);
-    }
-
-    Map<String, String> headers() {
-        return Collections.unmodifiableMap(new TreeMap<>(headers));
     }
 
     @Override

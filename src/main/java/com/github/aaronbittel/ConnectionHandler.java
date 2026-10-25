@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -35,14 +36,16 @@ public class ConnectionHandler implements Runnable {
     }
 
     private void handleConnection(Socket socket) throws IOException {
-        while (true) {
+        var in = new BufferedInputStream(socket.getInputStream());
+        var out = new BufferedOutputStream(socket.getOutputStream());
+
+        var closeConnection = false;
+        while (!closeConnection) {
             socket.setSoTimeout(Math.toIntExact(socketReadTimeout.toMillis()));
 
             log.fine(() -> "accepted client: " + socket.getRemoteSocketAddress());
 
-            var in = new BufferedInputStream(socket.getInputStream());
             var parser = new HttpRequestParser(new DeadlineInputStream(socket, in, System.nanoTime() + requestParsingTimeout.toNanos()));
-            var out = new BufferedOutputStream(socket.getOutputStream());
 
             HttpRequest request;
 
@@ -69,7 +72,19 @@ public class ConnectionHandler implements Runnable {
 
             var writer = HttpResponseWriter.forRequest(request.method());
             router.handleRequest(writer, request);
+            closeConnection = clientRequestsConnectionClose(request.headers());
+            if (closeConnection) {
+                writer.headers().set("Connection", "close");
+            }
             writer.finish(out, request.version());
         }
+    }
+
+    private static boolean clientRequestsConnectionClose(HttpHeaders headers) {
+        return headers.get("Connection")
+                .stream()
+                .flatMap(value -> Arrays.stream(value.split(",")))
+                .map(String::trim)
+                .anyMatch("close"::equalsIgnoreCase);
     }
 }

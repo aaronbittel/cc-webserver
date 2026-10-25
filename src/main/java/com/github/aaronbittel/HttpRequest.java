@@ -67,6 +67,10 @@ public class HttpRequest {
         return requestUrl;
     }
 
+    public HttpHeaders headers() {
+        return headers;
+    }
+
     public InputStream body() {
         return new ByteArrayInputStream(body);
     }

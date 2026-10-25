@@ -1,5 +1,6 @@
 package com.github.aaronbittel;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
@@ -190,6 +192,41 @@ public class HttpServerTest {
                     response2.hasStatusLine("HTTP/1.1 404 Not Found");
                 });
             }
+        }
+    }
+
+    @Test
+    void closes_connection_when_client_requests_connection_close() throws IOException {
+        try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
+            try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
+                var out = client.getOutputStream();
+                var request = """
+                        GET / HTTP/1.1
+                        Connection: close
+                        
+                        """.replace("\n", "\r\n").getBytes(StandardCharsets.UTF_8);
+                out.write(request);
+                out.flush();
+
+                var in = new BufferedInputStream(client.getInputStream());
+                HttpResponseWriterTest.HttpResponseAssert.readFrom(in)
+                        .hasStatusLine("HTTP/1.1 404 Not Found")
+                        .hasHeader("Connection: close");
+
+                assertConnectionClosed(client, Duration.ofSeconds(1));
+            }
+        }
+    }
+
+    private static void assertConnectionClosed(Socket socket, Duration timeout) throws IOException {
+        socket.setSoTimeout(Math.toIntExact(timeout.toMillis()));
+
+        try {
+            assertThat(socket.getInputStream().read())
+                    .as("Server should close the connection within %s", timeout)
+                    .isEqualTo(-1);
+        } catch (SocketTimeoutException e) {
+            Assertions.fail("Server did not close the connection within %s".formatted(timeout), e);
         }
     }
 }
