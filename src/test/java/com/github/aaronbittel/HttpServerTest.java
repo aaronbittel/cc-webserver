@@ -75,7 +75,8 @@ public class HttpServerTest {
 
     @Test
     @Tag("slow")
-    void returns_408_request_timeout_when_clients_takes_too_long_sending_request() throws IOException, InterruptedException {
+    void returns_408_request_timeout_when_clients_takes_too_long_sending_request() throws IOException,
+            InterruptedException {
         var server = new TestHttpServer(new HttpServer.Builder(new Router())
                 .requestParsingTimeout(Duration.ofSeconds(1)));
 
@@ -146,7 +147,8 @@ public class HttpServerTest {
                     client.getOutputStream().write("GET / HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
                     client.getOutputStream().flush();
 
-                    var reader = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.US_ASCII));
+                    var reader = new BufferedReader(new InputStreamReader(client.getInputStream(),
+                            StandardCharsets.US_ASCII));
                     return reader.readLine();
                 }
             });
@@ -160,7 +162,8 @@ public class HttpServerTest {
 
             try {
                 // Not ideal due to timing uncertainty, but sufficient to check that shutdown waits for the handler.
-                assertThatExceptionOfType(TimeoutException.class).isThrownBy(() -> shutdownFuture.get(200, TimeUnit.MILLISECONDS));
+                assertThatExceptionOfType(TimeoutException.class).isThrownBy(() -> shutdownFuture.get(200,
+                        TimeUnit.MILLISECONDS));
             } finally {
                 allowHandlerToFinish.countDown();
             }
@@ -174,7 +177,7 @@ public class HttpServerTest {
     }
 
     @Test
-    void handles_multiple_requests_on_the_same_connection() throws IOException {
+    void keeps_http_1_1_connection_open_by_default() throws IOException {
         var request = "GET / HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
         try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
@@ -200,8 +203,27 @@ public class HttpServerTest {
     }
 
     @Test
-    @Tag("slow")
-    void closes_connection_when_client_requests_connection_close() throws IOException {
+    void closes_http_1_0_connection_by_default() throws IOException {
+        var request = "GET / HTTP/1.0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+
+        try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
+            try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
+                var in = new BufferedInputStream(client.getInputStream());
+                var out = client.getOutputStream();
+
+                out.write(request);
+                out.flush();
+
+                var response = HttpResponseWriterTest.HttpResponseAssert.readFrom(in);
+                response.hasStatusLine("HTTP/1.0 404 Not Found");
+
+                assertConnectionClosed(client, Duration.ofMillis(200));
+            }
+        }
+    }
+
+    @Test
+    void closes_http_1_1_connection_when_close_is_requested() throws IOException {
         try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
             try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
                 var out = client.getOutputStream();
@@ -218,7 +240,35 @@ public class HttpServerTest {
                         .hasStatusLine("HTTP/1.1 404 Not Found")
                         .hasHeader("Connection: close");
 
-                assertConnectionClosed(client, Duration.ofSeconds(1));
+                assertConnectionClosed(client, Duration.ofMillis(200));
+            }
+        }
+    }
+
+    @Test
+    void keeps_http_1_0_connection_open_when_keep_alive_is_requested() throws IOException {
+        try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
+            try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
+                var out = client.getOutputStream();
+                var request = """
+                        GET / HTTP/1.0
+                        Connection: keep-alive
+                        
+                        """.replace("\n", "\r\n").getBytes(StandardCharsets.UTF_8);
+                out.write(request);
+                out.flush();
+
+                var in = new BufferedInputStream(client.getInputStream());
+                HttpResponseWriterTest.HttpResponseAssert.readFrom(in)
+                        .hasStatusLine("HTTP/1.0 404 Not Found")
+                        .hasHeader("Connection: keep-alive");
+
+                request = "GET / HTTP/1.0\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+                out.write(request);
+                out.flush();
+
+                HttpResponseWriterTest.HttpResponseAssert.readFrom(in)
+                        .hasStatusLine("HTTP/1.0 404 Not Found");
             }
         }
     }

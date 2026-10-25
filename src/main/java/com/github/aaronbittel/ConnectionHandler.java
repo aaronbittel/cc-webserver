@@ -44,12 +44,14 @@ public class ConnectionHandler implements Runnable {
         while (!closeConnection) {
             log.fine(() -> "accepted client: " + socket.getRemoteSocketAddress());
 
-            var parser = new HttpRequestParser(new DeadlineInputStream(socket, in, System.nanoTime() + requestParsingTimeout.toNanos()));
+            var parser = new HttpRequestParser(new DeadlineInputStream(socket, in,
+                    System.nanoTime() + requestParsingTimeout.toNanos()));
 
             HttpRequest request;
 
             try {
                 request = parser.parseRequest();
+                log.fine(() -> "request:" + request.requestLine());
             } catch (IllegalArgumentException e) {
                 log.fine(() -> "Invalid HTTP request: " + e.getMessage());
 
@@ -67,14 +69,21 @@ public class ConnectionHandler implements Runnable {
                 return;
             }
 
-            log.fine(() -> "request:" + request.requestLine());
+            if (request.version() == HttpVersion.HTTP_1_0) {
+                closeConnection = true;
+            }
 
             var writer = HttpResponseWriter.forRequest(request.method());
             router.handleRequest(writer, request);
-            closeConnection = clientRequestsConnectionClose(request.headers());
-            if (closeConnection) {
+
+            if (clientRequestsConnectionClose(request.headers())) {
+                closeConnection = true;
                 writer.headers().set("Connection", "close");
+            } else if (clientRequestsConnectionKeepAlive(request.headers())) {
+                closeConnection = false;
+                writer.headers().set("Connection", "keep-alive");
             }
+
             writer.finish(out, request.version());
 
             if (closeConnection || !awaitNextRequest(socket, in)) {
@@ -117,5 +126,13 @@ public class ConnectionHandler implements Runnable {
                 .flatMap(value -> Arrays.stream(value.split(",")))
                 .map(String::trim)
                 .anyMatch("close"::equalsIgnoreCase);
+    }
+
+    private static boolean clientRequestsConnectionKeepAlive(HttpHeaders headers) {
+        return headers.get("Connection")
+                .stream()
+                .flatMap(value -> Arrays.stream(value.split(",")))
+                .map(String::trim)
+                .anyMatch("keep-alive"::equalsIgnoreCase);
     }
 }
