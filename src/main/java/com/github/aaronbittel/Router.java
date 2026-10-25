@@ -12,15 +12,15 @@ import java.util.Set;
  * or mounted routers.
  *
  * <p>Routes registered through {@link #add(HttpMethod, String, HttpHandler)} are classified by their pattern:
- * paths without a trailing slash are exact routes, paths with a trailing slash are subtree routes, and paths
- * containing a path parameter such as {@code /users/{id}} are parameter routes. A subtree route matches its
- * registered base path and all descendant paths. A parameter route matches requests with the same path structure,
- * capturing the corresponding path segment as a parameter.
+ * paths without a trailing slash are exact routes, paths with a trailing slash are subtree routes, and paths containing
+ * a path parameter such as {@code /users/{id}} are parameter routes. A subtree route matches its registered base path
+ * and all descendant paths. A parameter route matches requests with the same path structure, capturing the
+ * corresponding path segment as a parameter.
  *
  * <p>Parameter names do not affect route identity. For example, {@code /users/{id}} and {@code /users/{name}}
  * represent the same parameter route and cannot be registered separately for the same HTTP method. Different HTTP
- * methods may be registered for the same parameter route. The parameter names from the first registration are
- * retained for request matching and parameter extraction.
+ * methods may be registered for the same parameter route. The parameter names from the first registration are retained
+ * for request matching and parameter extraction.
  *
  * <p>Routers can also be mounted through {@link #mount(String, Router)}. A mount delegates matching requests to
  * another router after stripping the mount prefix from the request path.
@@ -78,8 +78,8 @@ public class Router implements HttpHandler {
      * the same prefix as a mount.
      *
      * @param method  the HTTP method to register
-     * @param path    the route pattern; must start with {@code /} and contain no empty, {@code .}, or {@code ..} literal
-     *                path segments
+     * @param path    the route pattern; must start with {@code /} and contain no empty, {@code .}, or {@code ..}
+     *                literal path segments
      * @param handler the handler invoked when the route matches and supports the request method
      * @return this router instance, allowing method chaining
      * @throws IllegalArgumentException if the route pattern is invalid, the method and route are already registered, or
@@ -97,7 +97,8 @@ public class Router implements HttpHandler {
             case RoutePattern.ParameterRoute parameterRoute -> {
                 var key = parameterRoute.canonical();
 
-                var route = parameterRoutes.computeIfAbsent(key, _ -> new RegisteredParameterRoute(parameterRoute, new HashMap<>()));
+                var route = parameterRoutes.computeIfAbsent(key, _ -> new RegisteredParameterRoute(parameterRoute,
+                        new HashMap<>()));
                 if (route.handlers().putIfAbsent(method, handler) != null) {
                     throw new IllegalArgumentException("Duplicate route: %s conflicts with %s"
                             .formatted(path, parameterRoutes.get(key).route().path()));
@@ -164,6 +165,7 @@ public class Router implements HttpHandler {
                     HttpResponses.methodNotAllowed(writer, allowedMethods);
             case RoutingResult.NotFound() -> HttpResponses.notFound(writer);
             case RoutingResult.Redirect(var location) -> HttpResponses.redirect(writer, location);
+            case RoutingResult.Options(var allowedMethods) -> HttpResponses.options(writer, allowedMethods);
         }
     }
 
@@ -214,7 +216,7 @@ public class Router implements HttpHandler {
                 continue;
             }
 
-            if (machtesParameterRoute(route, requestSegments)) {
+            if (matchesParameterRoute(route, requestSegments)) {
                 request.setPathValue(route.parameterName(), requestSegments[requestSegments.length - 1]);
                 return Optional.of(resolveMatchedRoute(parameterRoute.handlers(), request));
             }
@@ -223,7 +225,7 @@ public class Router implements HttpHandler {
         return Optional.empty();
     }
 
-    private static boolean machtesParameterRoute(RoutePattern.ParameterRoute route, String[] requestSegments) {
+    private static boolean matchesParameterRoute(RoutePattern.ParameterRoute route, String[] requestSegments) {
         for (int i = 0; i < route.segments().size(); i++) {
             var routeSegment = route.segments().get(i);
             var requestSegment = requestSegments[i];
@@ -236,7 +238,7 @@ public class Router implements HttpHandler {
                 }
                 case RouteSegment.Parameter _ -> {}
                 case RouteSegment.TerminalWildcard _ -> throw new IllegalStateException(
-                        "Paramter Routes must not conatain a Terminal Wildcard");
+                        "Parameter Routes must not contain a Terminal Wildcard");
             }
         }
         return true;
@@ -299,7 +301,8 @@ public class Router implements HttpHandler {
 
             if (sm.prefix().length() > mm.prefix().length()) {
                 var strippedPath = request.path().substring(sm.prefix().length());
-                return Optional.of(resolveMatchedRoute(sm.methods(), request.withURL(request.requestUrl().withPath(strippedPath))));
+                return Optional.of(resolveMatchedRoute(sm.methods(),
+                        request.withURL(request.requestUrl().withPath(strippedPath))));
             }
 
             return Optional.of(new RoutingResult.Dispatch(mm.handler()));
@@ -308,7 +311,8 @@ public class Router implements HttpHandler {
         if (subtreeMatch.isPresent()) {
             var sm = subtreeMatch.orElseThrow();
             var strippedPath = request.path().substring(sm.prefix().length());
-            return Optional.of(resolveMatchedRoute(sm.methods(), request.withURL(request.requestUrl().withPath(strippedPath))));
+            return Optional.of(resolveMatchedRoute(sm.methods(),
+                    request.withURL(request.requestUrl().withPath(strippedPath))));
         }
 
         if (mountMatch.isPresent()) {
@@ -380,21 +384,26 @@ public class Router implements HttpHandler {
     /**
      * Resolves the HTTP method for a route that has already matched by path.
      *
-     * <p>If the route supports the requested method, the result dispatches to its handler. Otherwise, the result
-     * indicates that the method is not allowed and includes the methods supported by the route.
+     * <p>If the route supports the requested method, the result dispatches to its handler. If the requested method is
+     * {@code OPTIONS} and no explicit handler is registered, the result provides the methods allowed by the route.
+     * Otherwise, the result indicates that the method is not allowed and includes the methods supported by the route.
      *
      * @param route   the method-to-handler mapping for the matched route
      * @param request the request being resolved
-     * @return a dispatch result or a method-not-allowed result
+     * @return a dispatch result, an options result, or a method-not-allowed result
      */
     private RoutingResult resolveMatchedRoute(Map<HttpMethod, HttpHandler> route, HttpRequest request) {
         var handler = findHandler(route, request.method());
 
-        if (handler.isEmpty()) {
-            return new RoutingResult.MethodNotAllowed(getAllowedMethods(route));
+        if (handler.isPresent()) {
+            return new RoutingResult.Dispatch(handler.orElseThrow());
         }
 
-        return new RoutingResult.Dispatch(handler.orElseThrow());
+        if (request.method() == HttpMethod.OPTIONS) {
+            return new RoutingResult.Options(getAllowedMethods(route));
+        }
+
+        return new RoutingResult.MethodNotAllowed(getAllowedMethods(route));
     }
 
     /**
@@ -422,14 +431,17 @@ public class Router implements HttpHandler {
     /**
      * Returns the methods allowed by a matched route.
      *
-     * <p>The returned set includes all explicitly registered methods and adds {@code HEAD} whenever {@code GET} is
-     * registered, because this router supports {@code HEAD} through the {@code GET} handler.
+     * <p>The returned set includes all explicitly registered methods, always adds {@code OPTIONS}, and adds
+     * {@code HEAD} whenever {@code GET} is registered, because this router supports {@code HEAD} through the
+     * {@code GET} handler.
      *
      * @param routes the method-to-handler mapping for a matched route
      * @return the methods allowed for the route
      */
     private Set<HttpMethod> getAllowedMethods(Map<HttpMethod, HttpHandler> routes) {
         var allowedMethods = new HashSet<>(routes.keySet());
+
+        allowedMethods.add(HttpMethod.OPTIONS);
 
         if (allowedMethods.contains(HttpMethod.GET)) {
             allowedMethods.add(HttpMethod.HEAD);
@@ -524,6 +536,12 @@ public class Router implements HttpHandler {
          */
         record MethodNotAllowed(Set<HttpMethod> allowedMethods) implements RoutingResult {
             public MethodNotAllowed {
+                allowedMethods = Set.copyOf(allowedMethods);
+            }
+        }
+
+        record Options(Set<HttpMethod> allowedMethods) implements RoutingResult {
+            public Options {
                 allowedMethods = Set.copyOf(allowedMethods);
             }
         }

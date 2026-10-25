@@ -110,7 +110,7 @@ public class StaticFileHandlerE2ETests {
     @EnumSource(
             value = HttpMethod.class,
             mode = EnumSource.Mode.EXCLUDE,
-            names = {"GET", "HEAD"}
+            names = {"GET", "HEAD", "OPTIONS"}
     )
     void unsupported_method_returns_method_not_allowed(HttpMethod method) throws IOException, InterruptedException {
         assertThat(requestNoBody(method, "/static/index.html").statusCode())
@@ -174,7 +174,8 @@ public class StaticFileHandlerE2ETests {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> requestNoBody(HttpMethod method, String resource) throws IOException, InterruptedException {
+    private HttpResponse<String> requestNoBody(HttpMethod method, String resource) throws IOException,
+            InterruptedException {
         var request = requestBuilder(resource)
                 .method(method.name(), HttpRequest.BodyPublishers.noBody())
                 .build();

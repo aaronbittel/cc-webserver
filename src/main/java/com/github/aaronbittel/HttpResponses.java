@@ -33,4 +33,14 @@ public final class HttpResponses {
         writer.setStatus(HttpStatus.BAD_REQUEST);
         writer.write("Bad Request");
     }
+
+    public static void options(ResponseWriter writer, Set<HttpMethod> allowedMethods) {
+        var allow = allowedMethods.stream()
+                .map(HttpMethod::name)
+                .sorted()
+                .collect(Collectors.joining(", "));
+
+        writer.setStatus(HttpStatus.NO_CONTENT);
+        writer.headers().set("Allow", allow);
+    }
 }

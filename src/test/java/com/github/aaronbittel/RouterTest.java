@@ -52,7 +52,7 @@ public class RouterTest {
         void returns_method_not_allowed_when_method_does_not_match() throws IOException {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.POST, PATH));
             TestUtils.assertStatus(recorder, HttpStatus.METHOD_NOT_ALLOWED);
-            assertThat(recorder.result().headers().get("Allow")).hasValue("GET, HEAD");
+            assertThat(recorder.result().headers().get("Allow")).hasValue("GET, HEAD, OPTIONS");
         }
 
         @Test
@@ -109,6 +109,34 @@ public class RouterTest {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.HEAD, PATH));
             TestUtils.assertWasCalled(headHandler);
             TestUtils.assertWasNotCalled(getHandler);
+        }
+
+        @Test
+        void returns_allowed_methods_for_options_request() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, PATH));
+            assertThat(recorder.result().status()).isEqualTo(HttpStatus.NO_CONTENT);
+            assertThat(recorder.result().headers().get("Allow")).hasValue("GET, HEAD, OPTIONS");
+            assertThat(recorder.result().body()).isEmpty();
+        }
+
+        @Test
+        void prefers_explicit_options_handler_over_default() throws IOException {
+            var optionsHandler = new TestUtils.RecordingHandler();
+            router.add(HttpMethod.OPTIONS, PATH, optionsHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, PATH));
+            TestUtils.assertWasCalled(optionsHandler);
+        }
+
+        @Test
+        void returns_all_supported_methods_for_options_request() throws IOException {
+            router.add(HttpMethod.POST, PATH, TestUtils.NO_OP_HANDLER);
+            router.add(HttpMethod.HEAD, PATH, TestUtils.NO_OP_HANDLER);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, PATH));
+
+            assertThat(recorder.result().status()).isEqualTo(HttpStatus.NO_CONTENT);
+            assertThat(recorder.result().headers().get("Allow")).hasValue("GET, HEAD, OPTIONS, POST");
         }
     }
 
@@ -170,6 +198,23 @@ public class RouterTest {
             TestUtils.assertWasCalled(getHandler);
             assertThat(getHandler.received().requestUrl().query())
                     .isEqualTo("query=value");
+        }
+
+        @Test
+        void returns_allowed_methods_for_options_request() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, SUBTREE_PATH));
+            assertThat(recorder.result().status()).isEqualTo(HttpStatus.NO_CONTENT);
+            assertThat(recorder.result().headers().get("Allow")).hasValue("GET, HEAD, OPTIONS");
+            assertThat(recorder.result().body()).isEmpty();
+        }
+
+        @Test
+        void prefers_explicit_options_handler_over_default() throws IOException {
+            var optionsHandler = new TestUtils.RecordingHandler();
+            router.add(HttpMethod.OPTIONS, SUBTREE_PATH, optionsHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, SUBTREE_PATH));
+            TestUtils.assertWasCalled(optionsHandler);
         }
     }
 
@@ -440,6 +485,23 @@ public class RouterTest {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, BASE + "/"));
             TestUtils.assertWasCalled(subtreeHandler);
             TestUtils.assertWasNotCalled(parameterHandler);
+        }
+
+        @Test
+        void returns_allowed_methods_for_options_request() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, BASE + "/1"));
+            assertThat(recorder.result().status()).isEqualTo(HttpStatus.NO_CONTENT);
+            assertThat(recorder.result().headers().get("Allow")).hasValue("GET, HEAD, OPTIONS");
+            assertThat(recorder.result().body()).isEmpty();
+        }
+
+        @Test
+        void prefers_explicit_options_handler_over_default() throws IOException {
+            var optionsHandler = new TestUtils.RecordingHandler();
+            router.add(HttpMethod.OPTIONS, BASE + "/1", optionsHandler);
+
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, BASE + "/1"));
+            TestUtils.assertWasCalled(optionsHandler);
         }
     }
 
