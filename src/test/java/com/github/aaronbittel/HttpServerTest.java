@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -22,6 +23,7 @@ import java.util.logging.Logger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIOException;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatNoException;
 
 public class HttpServerTest {
 
@@ -162,6 +164,32 @@ public class HttpServerTest {
                     .isEqualTo("HTTP/1.1 404 Not Found");
         } finally {
             server.close();
+        }
+    }
+
+    @Test
+    void handles_multiple_requests_on_the_same_connection() throws IOException {
+        var request = "GET / HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+
+        try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
+            try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
+                var in = new BufferedInputStream(client.getInputStream());
+                var out = client.getOutputStream();
+
+                out.write(request);
+                out.flush();
+
+                var response = HttpResponseWriterTest.HttpResponseAssert.readFrom(in);
+                response.hasStatusLine("HTTP/1.1 404 Not Found");
+
+                out.write(request);
+                out.flush();
+
+                assertThatNoException().isThrownBy(() -> {
+                    var response2 = HttpResponseWriterTest.HttpResponseAssert.readFrom(in);
+                    response2.hasStatusLine("HTTP/1.1 404 Not Found");
+                });
+            }
         }
     }
 }

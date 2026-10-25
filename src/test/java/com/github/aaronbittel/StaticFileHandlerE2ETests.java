@@ -33,7 +33,7 @@ public class StaticFileHandlerE2ETests {
     @TempDir
     private Path root;
 
-    private static final HttpClient client = HttpClient.newBuilder()
+    private final HttpClient client = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(1))
             .build();
@@ -56,6 +56,7 @@ public class StaticFileHandlerE2ETests {
 
     @AfterEach
     void tearDownServer() throws IOException {
+        client.close();
         server.close();
     }
 

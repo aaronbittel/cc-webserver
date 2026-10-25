@@ -99,7 +99,7 @@ public class HttpRequestParser {
      * @return the line without the trailing CRLF
      * @throws IOException if an I/O error occurs while reading the stream
      */
-    private static String readHttpLine(InputStream in) throws IOException {
+    static String readHttpLine(InputStream in) throws IOException {
         var sb = new StringBuilder();
 
         int c;

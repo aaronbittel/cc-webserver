@@ -4,8 +4,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -102,6 +105,31 @@ class HttpResponseWriterTest {
                     .skip(1)
                     .toList();
             body = response.substring(separator + 4);
+        }
+
+        private HttpResponseAssert(String statusLine, List<String> headers, String body) {
+            this.statusLine = statusLine;
+            this.headers = headers;
+            this.body = body;
+        }
+
+        static HttpResponseAssert readFrom(InputStream in) throws IOException {
+            var statusLine = HttpRequestParser.readHttpLine(in);
+            var headers = new ArrayList<String>();
+            String line;
+            int contentLength = 0;
+            while (!(line = HttpRequestParser.readHttpLine(in)).isEmpty()) {
+                headers.add(line);
+                if (line.regionMatches(true, 0, "Content-Length: ", 0, 16)) {
+                    contentLength = Integer.parseInt(line.substring(16).trim());
+                }
+            }
+            var body = in.readNBytes(contentLength);
+            if (body.length != contentLength) {
+                throw new EOFException("Incomplete HTTP response body");
+            }
+
+            return new HttpResponseAssert(statusLine, headers, new String(body, StandardCharsets.UTF_8));
         }
 
         static HttpResponseAssert from(ByteArrayOutputStream out) {

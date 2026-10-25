@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.util.Objects;
 
 public final class DeadlineInputStream extends InputStream {
 
@@ -13,7 +12,7 @@ public final class DeadlineInputStream extends InputStream {
     private final long deadline;
 
     public DeadlineInputStream(Socket socket, InputStream in, long deadline) {
-        this.socket = Objects.requireNonNull(socket);
+        this.socket = socket;
         this.in = in;
         this.deadline = deadline;
     }
