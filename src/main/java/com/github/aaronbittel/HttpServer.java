@@ -1,14 +1,10 @@
 package com.github.aaronbittel;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.net.SocketException;
-import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -60,13 +56,7 @@ public class HttpServer implements AutoCloseable {
         while (!serverSocket.isClosed()) {
             try {
                 var client = serverSocket.accept();
-                executorService.submit(() -> {
-                    try (client) {
-                        handleConnection(client);
-                    } catch (IOException e) {
-                        log.log(Level.WARNING, "Client connection failed", e);
-                    }
-                });
+                executorService.submit(new ConnectionHandler(client, router, socketReadTimeout, requestParsingTimeout));
             } catch (SocketException e) {
                 if (serverSocket.isClosed()) {
                     break; // server shutdown
@@ -87,43 +77,6 @@ public class HttpServer implements AutoCloseable {
             Thread.currentThread().interrupt();
             log.log(Level.WARNING, "Interrupted while waiting for server shutdown", e);
         }
-    }
-
-    private void handleConnection(Socket client) throws IOException {
-        client.setSoTimeout(Math.toIntExact(socketReadTimeout.toMillis()));
-
-        log.info("accepted client: " + client.getLocalSocketAddress());
-
-        var in = new BufferedInputStream(client.getInputStream());
-        var parser = new HttpRequestParser(new DeadlineInputStream(client, in, System.nanoTime() + requestParsingTimeout.toNanos()));
-        var out = new BufferedOutputStream(client.getOutputStream());
-
-        HttpRequest request;
-
-        try {
-            request = parser.parseRequest();
-        } catch (IllegalArgumentException e) {
-            log.warning("Invalid HTTP request: " + e.getMessage());
-
-            var writer = HttpResponseWriter.forMalformedRequest();
-            HttpResponses.badRequestAndCloseConnection(writer);
-            writer.finish(out, HttpVersion.HTTP_1_1);
-            return;
-        } catch (SocketTimeoutException e) {
-            log.warning("Socket timeout: " + e.getMessage());
-
-            var writer = HttpResponseWriter.forMalformedRequest();
-            writer.headers().set("Connection", "close");
-            writer.setStatus(HttpStatus.REQUEST_TIMEOUT);
-            writer.finish(out, HttpVersion.HTTP_1_1);
-            return;
-        }
-
-        log.info("request:" + request.requestLine());
-
-        var writer = HttpResponseWriter.forRequest(request.method());
-        router.handleRequest(writer, request);
-        writer.finish(out, request.version());
     }
 
     public int port() {
