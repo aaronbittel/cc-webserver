@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
@@ -36,13 +37,16 @@ public class HttpServerTest {
     }
 
     @Test
-    void returns_400_bad_request_when_message_is_malformed() throws IOException {
+    void returns_400_bad_request_when_request_line_is_malformed() throws IOException {
         try (var server = new TestHttpServer(new HttpServer.Builder(new Router()))) {
             try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
-                client.getOutputStream().write("MALFORMED MESSAGE!\r\n".getBytes(StandardCharsets.UTF_8));
-                client.getOutputStream().flush();
+                var out = client.getOutputStream();
+                out.write("MALFORMED MESSAGE!\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                out.flush();
 
-                var reader = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.US_ASCII));
+                var reader = new BufferedReader(
+                        new InputStreamReader(client.getInputStream(), StandardCharsets.US_ASCII));
+
                 assertThat(reader.readLine()).isEqualTo("HTTP/1.1 400 Bad Request");
             }
         }
@@ -50,17 +54,20 @@ public class HttpServerTest {
 
     @Test
     @Tag("slow")
-    void returns_408_request_timeout_when_client_request_times_out() throws IOException {
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void returns_408_request_timeout_when_request_is_incomplete() throws IOException {
         var server = new TestHttpServer(new HttpServer.Builder(new Router())
-                .socketReadTimeout(Duration.ofSeconds(5))
                 .requestParsingTimeout(Duration.ofSeconds(1)));
 
         try (server) {
             try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {
-                client.getOutputStream().write("TIMEOUT!".getBytes(StandardCharsets.UTF_8));
-                client.getOutputStream().flush();
+                var out = client.getOutputStream();
+                out.write("GET / HTTP/1.1\r\nHost:".getBytes(StandardCharsets.US_ASCII));
+                out.flush();
 
-                var reader = new BufferedReader(new InputStreamReader(client.getInputStream(), StandardCharsets.US_ASCII));
+                var reader = new BufferedReader(
+                        new InputStreamReader(client.getInputStream(), StandardCharsets.US_ASCII));
+
                 assertThat(reader.readLine()).isEqualTo("HTTP/1.1 408 Request Timeout");
             }
         }
@@ -70,8 +77,7 @@ public class HttpServerTest {
     @Tag("slow")
     void returns_408_request_timeout_when_clients_takes_too_long_sending_request() throws IOException, InterruptedException {
         var server = new TestHttpServer(new HttpServer.Builder(new Router())
-                .socketReadTimeout(Duration.ofMillis(500))
-                .requestParsingTimeout(Duration.ofSeconds(2)));
+                .requestParsingTimeout(Duration.ofSeconds(1)));
 
         try (server) {
             try (var client = new Socket(InetAddress.getLoopbackAddress(), server.port())) {

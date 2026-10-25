@@ -22,16 +22,13 @@ public class HttpServer implements AutoCloseable {
     private final Router router;
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
 
-    private final Duration socketReadTimeout;
     private final Duration requestParsingTimeout;
 
-    private static final Duration DEFAULT_SOCKET_READ_TIMEOUT = Duration.ofSeconds(30);
-    private static final Duration DEFAULT_REQUEST_PARSING_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration DEFAULT_REQUEST_PARSING_TIMEOUT = Duration.ofSeconds(15);
 
     private HttpServer(Builder builder) {
         Objects.requireNonNull(builder);
         this.router = builder.router;
-        this.socketReadTimeout = builder.socketReadTimeout;
         this.requestParsingTimeout = builder.requestParsingTimeout;
     }
 
@@ -56,7 +53,7 @@ public class HttpServer implements AutoCloseable {
         while (!serverSocket.isClosed()) {
             try {
                 var client = serverSocket.accept();
-                executorService.submit(new ConnectionHandler(client, router, socketReadTimeout, requestParsingTimeout));
+                executorService.submit(new ConnectionHandler(client, router, requestParsingTimeout));
             } catch (SocketException e) {
                 if (serverSocket.isClosed()) {
                     break; // server shutdown
@@ -100,16 +97,10 @@ public class HttpServer implements AutoCloseable {
     public static class Builder {
 
         private final Router router;
-        private Duration socketReadTimeout = DEFAULT_SOCKET_READ_TIMEOUT;
         private Duration requestParsingTimeout = DEFAULT_REQUEST_PARSING_TIMEOUT;
 
         public Builder(Router router) {
             this.router = Objects.requireNonNull(router);
-        }
-
-        public Builder socketReadTimeout(Duration socketReadTimeout) {
-            this.socketReadTimeout = Objects.requireNonNull(socketReadTimeout);
-            return this;
         }
 
         public Builder requestParsingTimeout(Duration requestParsingTimeout) {

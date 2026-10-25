@@ -16,13 +16,11 @@ public class ConnectionHandler implements Runnable {
 
     private final Socket socket;
     private final Router router;
-    private final Duration socketReadTimeout;
     private final Duration requestParsingTimeout;
 
-    public ConnectionHandler(Socket socket, Router router, Duration socketReadTimeout, Duration requestParsingTimeout) {
+    public ConnectionHandler(Socket socket, Router router, Duration requestParsingTimeout) {
         this.socket = socket;
         this.router = router;
-        this.socketReadTimeout = socketReadTimeout;
         this.requestParsingTimeout = requestParsingTimeout;
     }
 
@@ -41,8 +39,6 @@ public class ConnectionHandler implements Runnable {
 
         var closeConnection = false;
         while (!closeConnection) {
-            socket.setSoTimeout(Math.toIntExact(socketReadTimeout.toMillis()));
-
             log.fine(() -> "accepted client: " + socket.getRemoteSocketAddress());
 
             var parser = new HttpRequestParser(new DeadlineInputStream(socket, in, System.nanoTime() + requestParsingTimeout.toNanos()));
