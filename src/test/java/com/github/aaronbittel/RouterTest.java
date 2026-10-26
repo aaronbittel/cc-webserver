@@ -196,8 +196,7 @@ public class RouterTest {
             router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, SUBTREE_PATH + "docs?query=value"));
 
             TestUtils.assertWasCalled(getHandler);
-            assertThat(getHandler.received().requestUrl().query())
-                    .isEqualTo("query=value");
+            assertThat(getHandler.received().requestUrl().query()).isEqualTo("query=value");
         }
 
         @Test
@@ -215,6 +214,15 @@ public class RouterTest {
 
             router.handleRequest(recorder, TestUtils.request(HttpMethod.OPTIONS, SUBTREE_PATH));
             TestUtils.assertWasCalled(optionsHandler);
+        }
+
+        @Test
+        void preserves_query_string_when_redirecting_base_path() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, EXACT_PATH + "?key=value"));
+
+            TestUtils.assertStatus(recorder, HttpStatus.TEMPORARY_REDIRECT);
+            assertThat(recorder.result().headers().get("Location")).hasValue(SUBTREE_PATH + "?key=value");
+            TestUtils.assertWasNotCalled(getHandler);
         }
     }
 
@@ -315,6 +323,15 @@ public class RouterTest {
             TestUtils.assertWasCalled(getHandler);
             assertThat(getHandler.received().requestUrl().path()).isEqualTo("/docs");
             assertThat(getHandler.received().requestUrl().query()).isEqualTo("query=value");
+        }
+
+        @Test
+        void preserves_query_string_when_redirecting_mount_prefix() throws IOException {
+            router.handleRequest(recorder, TestUtils.request(HttpMethod.GET, MOUNT_PREFIX + "?key=value"));
+
+            TestUtils.assertStatus(recorder, HttpStatus.TEMPORARY_REDIRECT);
+            assertThat(recorder.result().headers().get("Location")).hasValue(MOUNT_ROOT_PATH + "?key=value");
+            TestUtils.assertWasNotCalled(getHandler);
         }
     }
 

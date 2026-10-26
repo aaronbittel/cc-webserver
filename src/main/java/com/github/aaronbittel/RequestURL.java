@@ -54,4 +54,11 @@ public class RequestURL {
     public boolean hasQuery() {
         return hasQuery;
     }
+
+    public String toString() {
+        if (hasQuery) {
+            return path + "?" + query;
+        }
+        return path;
+    }
 }

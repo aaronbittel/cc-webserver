@@ -40,7 +40,7 @@ import java.util.Set;
  * for {@code HEAD} requests. The {@code Allow} header includes {@code HEAD} whenever {@code GET} is supported.
  *
  * <p>Trailing-slash redirects are independent of the request method and use {@code 301 Moved Permanently}. The
- * redirect location contains the canonical path.
+ * redirect requestURL contains the canonical path.
  */
 public class Router implements HttpHandler {
 
@@ -164,7 +164,7 @@ public class Router implements HttpHandler {
             case RoutingResult.MethodNotAllowed(var allowedMethods) ->
                     HttpResponses.methodNotAllowed(writer, allowedMethods);
             case RoutingResult.NotFound() -> HttpResponses.notFound(writer);
-            case RoutingResult.Redirect(var location) -> HttpResponses.redirect(writer, location);
+            case RoutingResult.Redirect(var requestURL) -> HttpResponses.redirect(writer, requestURL.toString());
             case RoutingResult.Options(var allowedMethods) -> HttpResponses.options(writer, allowedMethods);
         }
     }
@@ -272,10 +272,10 @@ public class Router implements HttpHandler {
             return Optional.empty();
         }
 
-        var canonicalPath = path + "/";
+        var canonicalUrl = request.requestUrl().withPath(request.path() + "/");
 
-        if (subtreeRoutes.containsKey(canonicalPath) || mountRoutes.containsKey(canonicalPath)) {
-            return Optional.of(new RoutingResult.Redirect(canonicalPath));
+        if (subtreeRoutes.containsKey(canonicalUrl.path()) || mountRoutes.containsKey(canonicalUrl.path())) {
+            return Optional.of(new RoutingResult.Redirect(canonicalUrl));
         }
 
         return Optional.empty();
@@ -522,8 +522,8 @@ public class Router implements HttpHandler {
         /** Indicates that a handler has been selected for the request. */
         record Dispatch(HttpHandler handler) implements RoutingResult {}
 
-        /** Indicates that the request should be redirected to a canonical path. */
-        record Redirect(String location) implements RoutingResult {}
+        /** Indicates that the request should be redirected to the specified canonical URL. */
+        record Redirect(RequestURL requestURL) implements RoutingResult {}
 
         /** Indicates that no registered route matches the request path. */
         record NotFound() implements RoutingResult {}
