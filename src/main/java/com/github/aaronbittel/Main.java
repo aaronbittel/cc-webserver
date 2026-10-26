@@ -29,44 +29,13 @@ public class Main {
         var staticFileHandler = new StripPrefixHandler(new StaticFileHandler(root), "/static");
 
         var usersRouter = new Router()
-                .add(HttpMethod.GET, "/", (writer, _) -> {
-                    writer.headers().set("Content-Type", "text/plain");
-                    writer.write("Users home");
-                })
-                .add(HttpMethod.GET, "/profile", (writer, _) -> {
-                    writer.headers().set("Content-Type", "text/plain");
-                    writer.write("User profile");
-                });
+                .add(HttpMethod.GET, "/", Main::usersHomeHandler)
+                .add(HttpMethod.GET, "/profile", Main::userProfileHandler);
 
         var router = new Router()
-                .add(HttpMethod.GET, "/", (writer, _) -> {
-                    writer.headers().set("Content-Type", "text/plain");
-                    writer.write("Hello, World!");
-                })
+                .add(HttpMethod.GET, "/", Main::homeHandler)
                 .add(HttpMethod.GET, "/static/", staticFileHandler)
-                .add(HttpMethod.GET, "/time", (writer, request) -> {
-                    var defaultPattern = "HH:mm:ss";
-                    var query = request.requestUrl().parseQuery();
-                    var formats = query.get("format");
-
-                    var pattern = formats.isEmpty() ? defaultPattern : formats.getFirst();
-
-                    DateTimeFormatter formatter;
-                    try {
-                        formatter = DateTimeFormatter.ofPattern(pattern);
-                    } catch (IllegalArgumentException _) {
-                        writer.setStatus(HttpStatus.BAD_REQUEST);
-                        writer.headers().set("Content-Type", "application/json");
-                        writer.write("{\"error\":\"Invalid date-time format\"}");
-                        return;
-                    }
-
-                    var now = LocalDateTime.now().format(formatter);
-                    var body = "{\"time\":\"" + now + "\"}";
-
-                    writer.headers().set("Content-Type", "application/json");
-                    writer.write(body);
-                })
+                .add(HttpMethod.GET, "/time", Main::timeHandler)
                 .mount("/users", usersRouter);
 
         try (var server = new HttpServer.Builder(router).build()) {
@@ -81,6 +50,44 @@ public class Main {
             ));
             server.start(address, port);
         }
+    }
+
+    private static void homeHandler(ResponseWriter writer, HttpRequest ignored) throws IOException {
+        writer.headers().set("Content-Type", "text/plain");
+        writer.write("Hello, World!");
+    }
+
+    private static void usersHomeHandler(ResponseWriter writer, HttpRequest ignored) throws IOException {
+        writer.headers().set("Content-Type", "text/plain");
+        writer.write("Users home");
+    }
+
+    private static void userProfileHandler(ResponseWriter writer, HttpRequest ignored) throws IOException {
+        writer.headers().set("Content-Type", "text/plain");
+        writer.write("User profile");
+    }
+
+    private static void timeHandler(ResponseWriter writer, HttpRequest request) throws IOException {
+        var defaultPattern = "HH:mm:ss";
+        var query = request.requestUrl().parseQuery();
+        var formats = query.get("format");
+        var pattern = formats.isEmpty() ? defaultPattern : formats.getFirst();
+
+        DateTimeFormatter formatter;
+        try {
+            formatter = DateTimeFormatter.ofPattern(pattern);
+        } catch (IllegalArgumentException _) {
+            writer.setStatus(HttpStatus.BAD_REQUEST);
+            writer.headers().set("Content-Type", "application/json");
+            writer.write("{\"error\":\"Invalid date-time format\"}");
+            return;
+        }
+
+        var now = LocalDateTime.now().format(formatter);
+        var body = "{\"time\":\"" + now + "\"}";
+
+        writer.headers().set("Content-Type", "application/json");
+        writer.write(body);
     }
 
     private static String readEnvVar(String name, String fallback) {
