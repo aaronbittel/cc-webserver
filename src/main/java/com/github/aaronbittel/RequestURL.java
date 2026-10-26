@@ -34,6 +34,15 @@ public class RequestURL {
         );
     }
 
+    /**
+     * Parses this URL's query string into query parameters.
+     *
+     * @return the parsed query parameters
+     */
+    public QueryParams parseQuery() {
+        return QueryParams.parse(query);
+    }
+
     public String path() {
         return path;
     }

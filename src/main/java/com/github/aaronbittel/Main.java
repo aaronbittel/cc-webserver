@@ -44,8 +44,24 @@ public class Main {
                     writer.write("Hello, World!");
                 })
                 .add(HttpMethod.GET, "/static/", staticFileHandler)
-                .add(HttpMethod.GET, "/time", (writer, _) -> {
-                    var now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+                .add(HttpMethod.GET, "/time", (writer, request) -> {
+                    var defaultPattern = "HH:mm:ss";
+                    var query = request.requestUrl().parseQuery();
+                    var formats = query.get("format");
+
+                    var pattern = formats.isEmpty() ? defaultPattern : formats.getFirst();
+
+                    DateTimeFormatter formatter;
+                    try {
+                        formatter = DateTimeFormatter.ofPattern(pattern);
+                    } catch (IllegalArgumentException _) {
+                        writer.setStatus(HttpStatus.BAD_REQUEST);
+                        writer.headers().set("Content-Type", "application/json");
+                        writer.write("{\"error\":\"Invalid date-time format\"}");
+                        return;
+                    }
+
+                    var now = LocalDateTime.now().format(formatter);
                     var body = "{\"time\":\"" + now + "\"}";
 
                     writer.headers().set("Content-Type", "application/json");

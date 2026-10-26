@@ -40,4 +40,32 @@ class RequestURLTest {
                 .isThrownBy(() -> RequestURL.parse("hello"))
                 .withMessage("Request target must start with '/'");
     }
+
+    @Test
+    void parses_query_parameters() {
+        var target = RequestURL.parse("/search?q=java&page=2");
+
+        var params = target.parseQuery();
+
+        assertThat(params.get("q")).containsExactly("java");
+        assertThat(params.get("page")).containsExactly("2");
+    }
+
+    @Test
+    void returns_empty_query_parameters_when_query_is_missing() {
+        var target = RequestURL.parse("/search");
+
+        var params = target.parseQuery();
+
+        assertThat(params.get("q")).isEmpty();
+    }
+
+    @Test
+    void returns_empty_query_parameters_when_query_is_empty() {
+        var target = RequestURL.parse("/search?");
+
+        var params = target.parseQuery();
+
+        assertThat(params.get("q")).isEmpty();
+    }
 }

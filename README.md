@@ -28,6 +28,8 @@ curl http://127.0.0.1:8080/
 curl http://127.0.0.1:8080/time
 curl -i http://127.0.0.1:8080/users/
 curl -i http://127.0.0.1:8080/users/profile
+curl "http://127.0.0.1:8080/time?format=HH:mm:ss"
+curl "http://127.0.0.1:8080/time?format=yyyy-MM-dd"
 ```
 
 ## Routing
@@ -109,6 +111,19 @@ curl http://127.0.0.1:8080/static/hello.txt
 ```
 
 The handler also supports directory listings.
+
+## Query Parameters
+
+The server parses URL query strings into query parameters, supporting multiple values for the same key.
+Query parameters can be accessed through the request URL:
+
+```java
+var query = request.requestUrl().parseQuery();
+var formats = query.get("format");
+```
+
+The `get()` method returns a list of values, allowing repeated parameters such as `?tag=java&tag=http` to be represented
+without losing values.
 
 ## Example Application
 
