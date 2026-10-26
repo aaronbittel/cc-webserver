@@ -5,7 +5,7 @@ A small HTTP server written in Java, built as a learning project.
 Features include:
 
 - HTTP request handling and routing
-- Composable routers and handlers
+- Composable routers, handlers and middleware
 - Static file serving through `StaticFileHandler` and `StripPrefixHandler`
 
 ## Getting Started
@@ -62,9 +62,10 @@ var router = new Router()
 The first route responds to `GET /` with `Hello, World!`. The second captures the final path segment and makes it
 available through `request.pathValue("id")`. For example, `GET /users/42` returns `42`.
 
-### Mounting a Router
+### Mounting a Handler
 
-Routers can be composed by mounting one router under a path prefix. This helps keep related routes together.
+Mount any `HttpHandler` under a path prefix. This allows routers, middleware-wrapped handlers, and other handlers to be
+composed.
 
 ```java
 var users = new Router()
@@ -75,7 +76,7 @@ var router = new Router()
         .mount("/users", users);
 ```
 
-The mounted router handles requests under `/users/`:
+The mounted handler receives requests under `/users/` with the mount prefix stripped from the request path.
 
 ```bash
 curl http://127.0.0.1:8080/users/
@@ -112,10 +113,36 @@ curl http://127.0.0.1:8080/static/hello.txt
 
 The handler also supports directory listings.
 
+## Middleware
+
+Middleware wraps an `HttpHandler` to add behavior before or after request handling, such as logging, timing, or
+modifying response headers.
+
+Implement middleware by wrapping the next handler:
+
+```java
+Middleware logging = next -> (writer, request) -> {
+    System.out.println(request.method() + " " + request.requestUrl().path());
+    next.handleRequest(writer, request);
+};
+```
+
+Compose middleware with `MiddlewareChain`. Middleware runs in registration order for incoming requests and unwinds in
+reverse order after the next handler returns.
+
+```java
+var middleware = new MiddlewareChain(
+        Main::loggingMiddleware,
+        Main::timingMiddleware
+);
+
+HttpHandler handler = middleware.wrap(router);
+```
+
 ## Query Parameters
 
-The server parses URL query strings into query parameters, supporting multiple values for the same key.
-Query parameters can be accessed through the request URL:
+The server parses URL query strings into query parameters, supporting multiple values for the same key. Query parameters
+can be accessed through the request URL:
 
 ```java
 var query = request.requestUrl().parseQuery();
@@ -128,5 +155,5 @@ without losing values.
 ## Example Application
 
 `com.github.aaronbittel.Main` provides a runnable example of the server, including a greeting endpoint, a time endpoint,
-static file serving, and a mounted users router. Use it as a starting point for experimenting with the server's
-features.
+static file serving, a mounted users router, and middleware. Use it as a starting point for experimenting with the
+server's features.

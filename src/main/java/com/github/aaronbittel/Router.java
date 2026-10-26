@@ -9,7 +9,7 @@ import java.util.Set;
 
 /**
  * An HTTP router that dispatches requests to handlers registered for exact paths, subtree paths, parameterized paths,
- * or mounted routers.
+ * or mounted handlers.
  *
  * <p>Routes registered through {@link #add(HttpMethod, String, HttpHandler)} are classified by their pattern:
  * paths without a trailing slash are exact routes, paths with a trailing slash are subtree routes, and paths containing
@@ -22,8 +22,9 @@ import java.util.Set;
  * methods may be registered for the same parameter route. The parameter names from the first registration are retained
  * for request matching and parameter extraction.
  *
- * <p>Routers can also be mounted through {@link #mount(String, Router)}. A mount delegates matching requests to
- * another router after stripping the mount prefix from the request path.
+ * <p>Handlers can also be mounted through {@link #mount(String, HttpHandler)}. A mounted handler receives requests
+ * matching its mount prefix after the prefix has been stripped from the request path. The handler may be another router
+ * or any other {@link HttpHandler}, including a middleware-wrapped handler.
  *
  * <p>Requests are resolved in the following order:
  * <ol>
@@ -32,7 +33,7 @@ import java.util.Set;
  *     redirected to that canonical path.</li>
  *     <li>Otherwise, the longest matching prefix among subtree routes and mounts is selected.</li>
  *     <li>For a selected subtree route, the HTTP method is resolved. If the method is unsupported, a
- *     {@code 405 Method Not Allowed} response is returned. Mounted routers handle their own routing.</li>
+ *     {@code 405 Method Not Allowed} response is returned. A selected mount delegates the request to its handler.</li>
  *     <li>If no route matches, a {@code 404 Not Found} response is returned.</li>
  * </ol>
  *
@@ -40,7 +41,7 @@ import java.util.Set;
  * for {@code HEAD} requests. The {@code Allow} header includes {@code HEAD} whenever {@code GET} is supported.
  *
  * <p>Trailing-slash redirects are independent of the request method and use {@code 301 Moved Permanently}. The
- * redirect requestURL contains the canonical path.
+ * redirect request URL contains the canonical path.
  */
 public class Router implements HttpHandler {
 
@@ -110,26 +111,28 @@ public class Router implements HttpHandler {
     }
 
     /**
-     * Mounts another router under the specified prefix.
+     * Mounts a handler under the specified path prefix.
      *
      * <p>The prefix must start with {@code /}. A trailing slash is added if necessary, so {@code /users} and
      * {@code /users/} identify the same mount prefix.
      *
-     * <p>Requests matching the mount prefix are delegated to the mounted router through a handler that strips the
-     * prefix before forwarding the request. For example, a request to {@code /users/profile} mounted at {@code /users/}
-     * is forwarded with the path {@code /profile}.
+     * <p>Requests matching the mount prefix are delegated to the supplied handler through a handler that strips the
+     * mount prefix before forwarding the request. For example, a request to {@code /users/profile} mounted at
+     * {@code /users/} is forwarded with the path {@code /profile}.
+     *
+     * <p>The supplied handler may be a {@link Router}, a middleware-wrapped handler, or any other {@link HttpHandler}.
      *
      * <p>A request to the mount base without its trailing slash, such as {@code /users}, is redirected to
      * {@code /users/}. A mount cannot share its normalized prefix with another mount or a subtree route. Exact routes
      * without a trailing slash may coexist with mounts.
      *
-     * @param prefix the mount prefix; must start with {@code /}
-     * @param router the router to mount
+     * @param prefix  the mount prefix; must start with {@code /}
+     * @param handler the handler that receives requests matching the mount prefix, with the prefix stripped
      * @return this router instance, allowing method chaining
      * @throws IllegalArgumentException if the prefix does not start with {@code /}, a mount already exists at the
      *                                  normalized prefix, or a subtree route is registered at that prefix
      */
-    public Router mount(String prefix, Router router) {
+    public Router mount(String prefix, HttpHandler handler) {
         validateMountPath(prefix);
 
         if (!isSubtreePattern(prefix)) {
@@ -144,7 +147,7 @@ public class Router implements HttpHandler {
             throw new IllegalArgumentException("Duplicated path: " + prefix);
         }
 
-        mountRoutes.put(prefix, new StripPrefixHandler(router, prefix.substring(0, prefix.length() - 1)));
+        mountRoutes.put(prefix, new StripPrefixHandler(handler, prefix.substring(0, prefix.length() - 1)));
 
         return this;
     }
@@ -286,7 +289,7 @@ public class Router implements HttpHandler {
      *
      * <p>Subtree routes and mounts compete on prefix length. The longer prefix wins, regardless of route type.
      * A selected subtree route is then resolved against the request method. A selected mount delegates the request to
-     * its mounted router.
+     * its registered handler.
      *
      * @param request the request to resolve
      * @return a routing result if a subtree route or mount matches, or empty otherwise
@@ -364,7 +367,7 @@ public class Router implements HttpHandler {
      * Finds the most-specific matching mount for a request path.
      *
      * @param path the request path
-     * @return the matching mount prefix and its handler, or empty if none match
+     * @return the matching mount prefix and its forwarding handler, or empty if none match
      */
     private Optional<MountMatch> findLongestMatchingMountRoute(String path) {
         return findLongestMatchingPrefix(path, mountRoutes.keySet())

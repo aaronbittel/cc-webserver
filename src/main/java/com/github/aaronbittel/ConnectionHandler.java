@@ -16,13 +16,13 @@ public class ConnectionHandler implements Runnable {
     private static final Logger log = Logger.getLogger(ConnectionHandler.class.getName());
 
     private final Socket socket;
-    private final Router router;
+    private final HttpHandler handler;
     private final Duration requestParsingTimeout;
     private final Duration idleTimeout;
 
-    public ConnectionHandler(Socket socket, Router router, Duration requestParsingTimeout, Duration idleTimeout) {
+    public ConnectionHandler(Socket socket, HttpHandler handler, Duration requestParsingTimeout, Duration idleTimeout) {
         this.socket = socket;
-        this.router = router;
+        this.handler = handler;
         this.requestParsingTimeout = requestParsingTimeout;
         this.idleTimeout = idleTimeout;
     }
@@ -74,7 +74,7 @@ public class ConnectionHandler implements Runnable {
             }
 
             var writer = HttpResponseWriter.forRequest(request.method());
-            router.handleRequest(writer, request);
+            handler.handleRequest(writer, request);
 
             if (clientRequestsConnectionClose(request.headers())) {
                 closeConnection = true;

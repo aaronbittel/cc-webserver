@@ -275,7 +275,7 @@ public class RouterTest {
         private static final String MOUNT_PREFIX = "/users";
         private static final String MOUNT_ROOT_PATH = "/users/";
 
-        private Router router;
+        private HttpHandler router;
         private TestUtils.RecordingHandler getHandler;
 
         @BeforeEach

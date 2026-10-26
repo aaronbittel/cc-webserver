@@ -38,7 +38,9 @@ public class Main {
                 .add(HttpMethod.GET, "/time", Main::timeHandler)
                 .mount("/users", usersRouter);
 
-        try (var server = new HttpServer.Builder(router).build()) {
+        var chain = new MiddlewareChain(Main::loggingMiddleware, Main::timingMiddleware);
+
+        try (var server = new HttpServer.Builder(chain.wrap(router)).build()) {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 System.out.println("Shutting down server...");
                 try {
@@ -88,6 +90,34 @@ public class Main {
 
         writer.headers().set("Content-Type", "application/json");
         writer.write(body);
+    }
+
+    private static HttpHandler loggingMiddleware(HttpHandler next) {
+        return (writer, request) -> {
+            var start = System.nanoTime();
+            var method = request.method();
+            var path = request.requestUrl().path();
+
+            System.out.printf("-> %s %s%n", method, path);
+
+            try {
+                next.handleRequest(writer, request);
+            } finally {
+                var elapsed = System.nanoTime() - start;
+                System.out.printf("<- %s %s (%.2f ms)%n", method, path, elapsed / 1_000_000.0);
+            }
+        };
+    }
+
+    private static HttpHandler timingMiddleware(HttpHandler next) {
+        return (writer, request) -> {
+            var start = System.nanoTime();
+
+            next.handleRequest(writer, request);
+
+            var elapsed = System.nanoTime() - start;
+            writer.headers().set("X-Response-Time", elapsed / 1_000_000.0 + " ms");
+        };
     }
 
     private static String readEnvVar(String name, String fallback) {

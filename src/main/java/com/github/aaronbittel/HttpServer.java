@@ -19,7 +19,7 @@ public class HttpServer implements AutoCloseable {
     private static final int BACKLOG = 5;
 
     private volatile ServerSocket serverSocket;
-    private final Router router;
+    private final HttpHandler handler;
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
 
     private final Duration requestParsingTimeout;
@@ -30,7 +30,7 @@ public class HttpServer implements AutoCloseable {
 
     private HttpServer(Builder builder) {
         Objects.requireNonNull(builder);
-        this.router = builder.router;
+        this.handler = builder.handler;
         this.requestParsingTimeout = builder.requestParsingTimeout;
         this.idleTimeout = builder.idleTimeout;
     }
@@ -56,7 +56,7 @@ public class HttpServer implements AutoCloseable {
         while (!serverSocket.isClosed()) {
             try {
                 var client = serverSocket.accept();
-                executorService.submit(new ConnectionHandler(client, router, requestParsingTimeout, idleTimeout));
+                executorService.submit(new ConnectionHandler(client, handler, requestParsingTimeout, idleTimeout));
             } catch (SocketException e) {
                 if (serverSocket.isClosed()) {
                     break; // server shutdown
@@ -99,12 +99,12 @@ public class HttpServer implements AutoCloseable {
 
     public static class Builder {
 
-        private final Router router;
+        private final HttpHandler handler;
         private Duration requestParsingTimeout = DEFAULT_REQUEST_PARSING_TIMEOUT;
         private Duration idleTimeout = DEFAULT_IDLE_TIMEOUT;
 
-        public Builder(Router router) {
-            this.router = Objects.requireNonNull(router);
+        public Builder(HttpHandler handler) {
+            this.handler = Objects.requireNonNull(handler);
         }
 
         public Builder requestParsingTimeout(Duration requestParsingTimeout) {
