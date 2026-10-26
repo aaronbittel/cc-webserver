@@ -44,7 +44,6 @@ class RequestURLTest {
     @Test
     void parses_query_parameters() {
         var target = RequestURL.parse("/search?q=java&page=2");
-
         var params = target.parseQuery();
 
         assertThat(params.get("q")).containsExactly("java");
@@ -54,18 +53,24 @@ class RequestURLTest {
     @Test
     void returns_empty_query_parameters_when_query_is_missing() {
         var target = RequestURL.parse("/search");
-
-        var params = target.parseQuery();
-
-        assertThat(params.get("q")).isEmpty();
+        assertThat(target.parseQuery().get("q")).isEmpty();
     }
 
     @Test
     void returns_empty_query_parameters_when_query_is_empty() {
         var target = RequestURL.parse("/search?");
+        assertThat(target.parseQuery().get("q")).isEmpty();
+    }
 
-        var params = target.parseQuery();
+    @Test
+    void parses_percent_encoded_query_values() {
+        var target = RequestURL.parse("/search?q=hello%20world");
+        assertThat(target.parseQuery().get("q")).containsExactly("hello world");
+    }
 
-        assertThat(params.get("q")).isEmpty();
+    @Test
+    void rejects_invalid_percent_encoding_in_query() {
+        var target = RequestURL.parse("/search?q=%GG");
+        assertThatIllegalArgumentException().isThrownBy(target::parseQuery);
     }
 }

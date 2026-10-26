@@ -3,6 +3,7 @@ package com.github.aaronbittel;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class QueryParamsTest {
 
@@ -47,5 +48,36 @@ class QueryParamsTest {
     @Test
     void returns_no_values_for_empty_query() {
         assertThat(QueryParams.parse("").get("key")).isEmpty();
+    }
+
+    @Test
+    void decodes_percent_encoded_key_and_value() {
+        var query = QueryParams.parse("first%20name=John%20Doe");
+        assertThat(query.get("first name")).containsExactly("John Doe");
+    }
+
+    @Test
+    void decodes_utf8_percent_encoded_values() {
+        assertThat(QueryParams.parse("name=%C3%A9").get("name")).containsExactly("é");
+    }
+
+    @Test
+    void preserves_encoded_query_delimiters() {
+        assertThat(QueryParams.parse("key=one%26two%3Dthree").get("key")).containsExactly("one&two=three");
+    }
+
+    @Test
+    void preserves_plus_signs() {
+        assertThat(QueryParams.parse("key=one+two").get("key")).containsExactly("one+two");
+    }
+
+    @Test
+    void rejects_invalid_percent_encoding() {
+        assertThatIllegalArgumentException().isThrownBy(() -> QueryParams.parse("key=%GG"));
+    }
+
+    @Test
+    void rejects_invalid_utf8_in_percent_encoding() {
+        assertThatIllegalArgumentException().isThrownBy(() -> QueryParams.parse("key=%FF"));
     }
 }

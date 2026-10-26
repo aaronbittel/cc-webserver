@@ -27,8 +27,9 @@ public class QueryParams {
 
         for (var pair : pairs) {
             var parts = pair.split("=", 2);
-            var list = params.values.computeIfAbsent(parts[0], _ -> new ArrayList<>());
-            list.add(parts.length == 2 ? parts[1] : "");
+            var key = PercentDecoder.decode(parts[0]);
+            var list = params.values.computeIfAbsent(key, _ -> new ArrayList<>());
+            list.add(parts.length == 2 ? PercentDecoder.decode(parts[1]) : "");
         }
 
         return params;
