@@ -47,7 +47,7 @@ public class StaticFileHandlerE2ETests {
     }
 
     @BeforeEach
-    void setupServer() throws IOException {
+    void setUp() throws IOException {
         Router router = new Router()
                 .add(HttpMethod.GET, "/static/", new StripPrefixHandler(new StaticFileHandler(root), "/static"));
 
@@ -55,7 +55,7 @@ public class StaticFileHandlerE2ETests {
     }
 
     @AfterEach
-    void tearDownServer() throws IOException {
+    void tearDown() throws IOException {
         client.close();
         server.close();
     }

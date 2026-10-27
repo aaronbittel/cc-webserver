@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIOException;
 
 class HttpResponseWriterTest {
 
@@ -20,7 +21,7 @@ class HttpResponseWriterTest {
     private final HttpResponseWriter writer = HttpResponseWriter.forRequest(HttpMethod.GET);
 
     @BeforeEach
-    void resetOutputStream() {
+    void setUp() {
         out.reset();
     }
 
@@ -52,7 +53,7 @@ class HttpResponseWriterTest {
     }
 
     @Test
-    void sets_content_length_automatically() throws IOException {
+    void sets_content_length_when_not_provided() throws IOException {
         writer.write("Hello, World!");
         writer.finish(out, HttpVersion.HTTP_1_1);
         HttpResponseAssert.from(out).hasHeader("Content-Length: 13");
@@ -83,6 +84,57 @@ class HttpResponseWriterTest {
 
         writer.finish(out, HttpVersion.HTTP_1_1);
         assertThat(out.toString(StandardCharsets.UTF_8)).isEqualTo(response);
+    }
+
+    @Test
+    void preserves_content_length_when_it_matches_body_size() throws IOException {
+        writer.headers().set("Content-Length", "13");
+        writer.write("Hello");
+        writer.write(", ");
+        writer.write("World!");
+
+        writer.finish(out, HttpVersion.HTTP_1_1);
+
+        HttpResponseAssert.from(out)
+                .hasStatusLine("HTTP/1.1 200 OK")
+                .hasHeader("Content-Length: 13")
+                .hasBody("Hello, World!");
+
+    }
+
+    @Test
+    void throws_if_content_length_exceeds_actual_body_size() throws IOException {
+        writer.headers().set("Content-Length", "10");
+        writer.write("Hello");
+
+        assertThatIOException()
+                .isThrownBy(() -> writer.finish(out, HttpVersion.HTTP_1_1))
+                .withMessage("Content-Length mismatch: declared 10 bytes, but body contains 5 bytes");
+
+        assertThat(out.size()).isZero();
+    }
+
+    @Test
+    void throws_if_content_length_is_less_than_actual_body_size() throws IOException {
+        writer.headers().set("Content-Length", "3");
+        writer.write("Hello");
+
+        assertThatIOException()
+                .isThrownBy(() -> writer.finish(out, HttpVersion.HTTP_1_1))
+                .withMessage("Content-Length mismatch: declared 3 bytes, but body contains 5 bytes");
+
+        assertThat(out.size()).isZero();
+    }
+
+    @Test
+    void accepts_zero_content_length_for_empty_body() throws IOException {
+        writer.headers().set("Content-Length", "0");
+
+        writer.finish(out, HttpVersion.HTTP_1_1);
+
+        HttpResponseAssert.from(out)
+                .hasHeader("Content-Length: 0")
+                .hasEmptyBody();
     }
 
     static class HttpResponseAssert {

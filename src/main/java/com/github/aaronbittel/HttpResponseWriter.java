@@ -57,7 +57,22 @@ public class HttpResponseWriter implements ResponseWriter {
         var headers = headers();
         headers.set("Date", ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME));
         // TODO: handle 204 and other special cases
-        headers.set("Content-Length", String.valueOf(body.length));
+
+        var contentLengthHeader = headers.get("Content-Length");
+
+        int contentLength;
+        if (contentLengthHeader.isPresent()) {
+            contentLength = Integer.parseInt(contentLengthHeader.get());
+        } else {
+            contentLength = body.length;
+            headers.set("Content-Length", String.valueOf(contentLength));
+        }
+
+        if (contentLength != body.length) {
+            throw new IOException("Content-Length mismatch: declared %d bytes, but body contains %d bytes"
+                    .formatted(contentLength, body.length)
+            );
+        }
 
         serialize(out, version, body);
     }
