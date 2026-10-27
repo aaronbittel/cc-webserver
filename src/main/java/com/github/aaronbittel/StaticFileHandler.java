@@ -36,7 +36,10 @@ public record StaticFileHandler(Path root) implements HttpHandler {
             case ResolvedResource.FileResource(var path) -> {
                 var contentType = Objects.requireNonNullElse(Files.probeContentType(path), "application/octet-stream");
                 writer.headers().set("Content-Type", contentType);
-                writer.write(Files.readAllBytes(path));
+                writer.headers().set("Content-Length", String.valueOf(Files.size(path)));
+                try (var in = Files.newInputStream(path)) {
+                    writer.write(in);
+                }
             }
             case ResolvedResource.NotFound _ -> HttpResponses.notFound(writer);
         }
