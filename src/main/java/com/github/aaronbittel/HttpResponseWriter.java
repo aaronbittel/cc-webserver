@@ -2,6 +2,7 @@ package com.github.aaronbittel;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneOffset;
@@ -95,6 +96,11 @@ public class HttpResponseWriter implements ResponseWriter {
     @Override
     public void write(byte[] data) throws IOException {
         buffer.write(data);
+    }
+
+    @Override
+    public void write(InputStream in) throws IOException {
+        in.transferTo(buffer);
     }
 
     private void writeStatusLine(OutputStream out, HttpVersion version, HttpStatus status) throws IOException {

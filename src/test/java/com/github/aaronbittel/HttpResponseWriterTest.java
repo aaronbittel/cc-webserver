@@ -3,6 +3,7 @@ package com.github.aaronbittel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
@@ -129,6 +130,29 @@ class HttpResponseWriterTest {
     @Test
     void accepts_zero_content_length_for_empty_body() throws IOException {
         writer.headers().set("Content-Length", "0");
+
+        writer.finish(out, HttpVersion.HTTP_1_1);
+
+        HttpResponseAssert.from(out)
+                .hasHeader("Content-Length: 0")
+                .hasEmptyBody();
+    }
+
+    @Test
+    void writes_body_from_input_stream() throws IOException {
+        var content = "Hello, World!";
+        writer.write(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)));
+
+        writer.finish(out, HttpVersion.HTTP_1_1);
+
+        HttpResponseAssert.from(out)
+                .hasHeader("Content-Length: 13")
+                .hasBody(content);
+    }
+
+    @Test
+    void writes_empty_input_stream() throws IOException {
+        writer.write(new ByteArrayInputStream(new byte[0]));
 
         writer.finish(out, HttpVersion.HTTP_1_1);
 

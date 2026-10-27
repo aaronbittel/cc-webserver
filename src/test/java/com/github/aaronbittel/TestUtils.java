@@ -1,5 +1,7 @@
 package com.github.aaronbittel;
 
+import java.io.InputStream;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestUtils {
@@ -76,5 +78,8 @@ public class TestUtils {
 
         @Override
         public void write(byte[] data) {}
+
+        @Override
+        public void write(InputStream in) {}
     }
 }

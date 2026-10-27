@@ -1,6 +1,7 @@
 package com.github.aaronbittel;
 
 import java.io.IOException;
+import java.io.InputStream;
 
 public interface ResponseWriter {
 
@@ -11,4 +12,6 @@ public interface ResponseWriter {
     void write(String text) throws IOException;
 
     void write(byte[] data) throws IOException;
+
+    void write(InputStream out) throws IOException;
 }

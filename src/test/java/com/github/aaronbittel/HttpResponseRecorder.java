@@ -2,6 +2,7 @@ package com.github.aaronbittel;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 public class HttpResponseRecorder implements ResponseWriter {
@@ -30,6 +31,11 @@ public class HttpResponseRecorder implements ResponseWriter {
     @Override
     public void write(byte[] data) throws IOException {
         buffer.write(data);
+    }
+
+    @Override
+    public void write(InputStream in) throws IOException {
+        in.transferTo(buffer);
     }
 
     public HttpResponse result() {
