@@ -13,14 +13,23 @@ public class HttpResponseWriter implements ResponseWriter {
 
     private HttpStatus status = HttpStatus.OK;
     private final HttpHeaders headers = new HttpHeaders();
-    private final static int BUFFER_SIZE = 8192;
-    private final ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
+    private static final int BUFFER_SIZE = 8192;
+    private final ByteBuffer buffer;
 
     private final boolean writeBody;
     private boolean calledFinish = false;
 
-    private HttpResponseWriter(boolean writeBody) {
+    HttpResponseWriter(boolean writeBody, int bufferSize) {
+        if (bufferSize <= 0) {
+            throw new IllegalArgumentException("bufferSize must be positive");
+        }
+
         this.writeBody = writeBody;
+        this.buffer = ByteBuffer.allocate(bufferSize);
+    }
+
+    private HttpResponseWriter(boolean writeBody) {
+        this(writeBody, BUFFER_SIZE);
     }
 
     public static HttpResponseWriter forRequest(HttpMethod method) {
