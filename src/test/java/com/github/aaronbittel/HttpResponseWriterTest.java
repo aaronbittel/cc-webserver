@@ -136,6 +136,39 @@ class HttpResponseWriterTest {
     }
 
     @Test
+    void honors_provided_chunked_encoding_for_empty_body() throws IOException {
+        writer.headers().set("Transfer-Encoding", "chunked");
+        writer.finish();
+
+        HttpResponseAssert.from(out)
+                .hasHeader("Transfer-Encoding: chunked")
+                .hasEmptyBody();
+    }
+
+    @Test
+    void honors_provided_chunked_encoding_for_non_empty_body() throws IOException {
+        var content = "hello";
+
+        writer.headers().set("Transfer-Encoding", "chunked");
+        writer.write(content);
+        writer.finish();
+
+        HttpResponseAssert.from(out)
+                .hasHeader("Transfer-Encoding: chunked")
+                .hasChunksExactly(content)
+                .hasBody(content);
+    }
+
+    @Test
+    void throws_when_content_length_and_transfer_encoding_are_both_provided() {
+        writer.headers().set("Content-Length", "0");
+        writer.headers().set("Transfer-Encoding", "chunked");
+
+        assertThatIOException().isThrownBy(writer::finish);
+        assertThat(out.size()).isEqualTo(0);
+    }
+
+    @Test
     void accepts_zero_content_length_for_empty_body() throws IOException {
         writer.headers().set("Content-Length", "0");
         writer.finish();

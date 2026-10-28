@@ -77,6 +77,19 @@ public class HttpResponseWriter implements ResponseWriter {
         calledFinish = true;
         freezeHeaders();
 
+        var transferEncodingChunkedProvided = responseHeaders.get("Transfer-Encoding").map(s -> s.equals("chunked")).orElse(false);
+        var contentLengthProvided = responseHeaders.get("Content-Length").isPresent();
+
+        if (transferEncodingChunkedProvided && contentLengthProvided) {
+            throw new IOException("Content-Length and Transfer-Encoding cannot both be set");
+        }
+
+        finishHeaders();
+
+        if (transferEncodingChunkedProvided) {
+            prepareChunkTransfer();
+        }
+
         if (state == ResponseState.CHUNKED) {
             if (buffer.position() > 0) {
                 writeChunk();
@@ -84,8 +97,6 @@ public class HttpResponseWriter implements ResponseWriter {
             writeTerminalChunk();
             return;
         }
-
-        finishHeaders();
 
         // TODO: handle 204 and other special cases
 
@@ -222,7 +233,7 @@ public class HttpResponseWriter implements ResponseWriter {
         out.flush();
     }
 
-    private void freezeHeaders() {
+    private void freezeHeaders() throws IOException {
         headersFrozen = true;
         if (responseHeaders == null) {
             responseHeaders = new HttpHeaders(headers);
