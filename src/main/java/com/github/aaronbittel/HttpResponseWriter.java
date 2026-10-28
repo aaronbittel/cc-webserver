@@ -1,9 +1,9 @@
 package com.github.aaronbittel;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -13,7 +13,8 @@ public class HttpResponseWriter implements ResponseWriter {
 
     private HttpStatus status = HttpStatus.OK;
     private final HttpHeaders headers = new HttpHeaders();
-    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    private final static int BUFFER_SIZE = 8192;
+    private final ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
 
     private final boolean writeBody;
     private boolean calledFinish = false;
@@ -30,7 +31,7 @@ public class HttpResponseWriter implements ResponseWriter {
         return new HttpResponseWriter(false);
     }
 
-    private void serialize(OutputStream out, HttpVersion version, byte[] body) throws IOException {
+    private void serialize(OutputStream out, HttpVersion version) throws IOException {
         writeStatusLine(out, version, status);
 
         for (var header : headers()) {
@@ -40,7 +41,7 @@ public class HttpResponseWriter implements ResponseWriter {
         writeCrlf(out);
 
         if (writeBody) {
-            out.write(body);
+            out.write(buffer.array(), 0, buffer.position());
         }
 
         out.flush();
@@ -53,8 +54,6 @@ public class HttpResponseWriter implements ResponseWriter {
 
         calledFinish = true;
 
-        var body = buffer.toByteArray();
-
         var headers = headers();
         headers.set("Date", ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME));
         // TODO: handle 204 and other special cases
@@ -65,17 +64,17 @@ public class HttpResponseWriter implements ResponseWriter {
         if (contentLengthHeader.isPresent()) {
             contentLength = Integer.parseInt(contentLengthHeader.get());
         } else {
-            contentLength = body.length;
+            contentLength = buffer.position();
             headers.set("Content-Length", String.valueOf(contentLength));
         }
 
-        if (contentLength != body.length) {
+        if (contentLength != buffer.position()) {
             throw new IOException("Content-Length mismatch: declared %d bytes, but body contains %d bytes"
-                    .formatted(contentLength, body.length)
+                    .formatted(contentLength, buffer.position())
             );
         }
 
-        serialize(out, version, body);
+        serialize(out, version);
     }
 
     @Override
@@ -90,17 +89,23 @@ public class HttpResponseWriter implements ResponseWriter {
 
     @Override
     public void write(String text) throws IOException {
-        buffer.write(text.getBytes(StandardCharsets.UTF_8));
+        buffer.put(text.getBytes(StandardCharsets.UTF_8));
     }
 
     @Override
     public void write(byte[] data) throws IOException {
-        buffer.write(data);
+        buffer.put(data);
     }
 
     @Override
     public void write(InputStream in) throws IOException {
-        in.transferTo(buffer);
+        while (buffer.hasRemaining()) {
+            int n = in.read(buffer.array(), buffer.position(), buffer.remaining());
+            if (n == -1) {
+                break;
+            }
+            buffer.position(buffer.position() + n);
+        }
     }
 
     private void writeStatusLine(OutputStream out, HttpVersion version, HttpStatus status) throws IOException {
