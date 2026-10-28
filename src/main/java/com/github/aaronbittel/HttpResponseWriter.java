@@ -17,6 +17,8 @@ public class HttpResponseWriter implements ResponseWriter {
     private final ByteBuffer buffer;
     private final OutputStream out;
 
+    private ResponseState state = ResponseState.UNDECIDED;
+
     private final boolean writeBody;
     private final HttpVersion version;
     private boolean calledFinish = false;
@@ -44,22 +46,6 @@ public class HttpResponseWriter implements ResponseWriter {
         return new HttpResponseWriter(out, false, HttpVersion.HTTP_1_1);
     }
 
-    private void serialize() throws IOException {
-        writeStatusLine();
-
-        for (var header : headers()) {
-            writeHeaderLine(header.getKey(), header.getValue());
-        }
-
-        writeCrlf();
-
-        if (writeBody) {
-            out.write(buffer.array(), 0, buffer.position());
-        }
-
-        out.flush();
-    }
-
     public void finish() throws IOException {
         if (calledFinish) {
             return;
@@ -67,8 +53,17 @@ public class HttpResponseWriter implements ResponseWriter {
 
         calledFinish = true;
 
+        if (state == ResponseState.CHUNKED) {
+            if (buffer.position() > 0) {
+                writeChunk();
+            }
+            writeTerminalChunk();
+            return;
+        }
+
         var headers = headers();
-        headers.set("Date", ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME));
+        finishHeaders(headers);
+
         // TODO: handle 204 and other special cases
 
         var contentLengthHeader = headers.get("Content-Length");
@@ -87,7 +82,7 @@ public class HttpResponseWriter implements ResponseWriter {
             );
         }
 
-        serialize();
+        writeResponse();
     }
 
     @Override
@@ -111,17 +106,65 @@ public class HttpResponseWriter implements ResponseWriter {
             buffer.put(data);
             return;
         }
+
+        var source = ByteBuffer.wrap(data);
+
+        while (source.remaining() > 0) {
+            prepareChunkTransfer();
+
+            int count = Math.min(source.remaining(), buffer.remaining());
+
+            int oldLimit = source.limit();
+            source.limit(source.position() + count);
+            buffer.put(source);
+            source.limit(oldLimit);
+
+            if (buffer.remaining() == 0) {
+                writeChunk();
+            }
+        }
     }
 
     @Override
     public void write(InputStream in) throws IOException {
-        while (buffer.hasRemaining()) {
+        while (true) {
             int n = in.read(buffer.array(), buffer.position(), buffer.remaining());
             if (n == -1) {
                 break;
             }
+
+            if (buffer.remaining() == 0) {
+                prepareChunkTransfer();
+                writeChunk();
+            }
+
             buffer.position(buffer.position() + n);
         }
+    }
+
+    private void writeResponse() throws IOException {
+        writeStatusLine();
+        writeHeaders();
+
+        if (writeBody) {
+            out.write(buffer.array(), 0, buffer.position());
+        }
+
+        out.flush();
+    }
+
+    private void prepareChunkTransfer() throws IOException {
+        if (state == ResponseState.UNDECIDED) {
+            state = ResponseState.CHUNKED;
+            finishHeaders(headers);
+            headers.set("Transfer-Encoding", "chunked");
+            writeStatusLine();
+            writeHeaders();
+        }
+    }
+
+    private static void finishHeaders(HttpHeaders headers) {
+        headers.set("Date", ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME));
     }
 
     private void writeStatusLine() throws IOException {
@@ -130,6 +173,28 @@ public class HttpResponseWriter implements ResponseWriter {
         writeAscii(String.valueOf(status.code()));
         out.write(' ');
         writeAscii(status.text());
+        writeCrlf();
+    }
+
+    private void writeChunk() throws IOException {
+        out.write(Integer.toHexString(buffer.position()).getBytes(StandardCharsets.US_ASCII));
+        writeCrlf();
+        out.write(buffer.array(), 0, buffer.position());
+        writeCrlf();
+
+        buffer.clear();
+    }
+
+    private void writeTerminalChunk() throws IOException {
+        out.write('0');
+        writeCrlf();
+        writeCrlf();
+    }
+
+    private void writeHeaders() throws IOException {
+        for (var header : headers()) {
+            writeHeaderLine(header.getKey(), header.getValue());
+        }
         writeCrlf();
     }
 
@@ -148,5 +213,10 @@ public class HttpResponseWriter implements ResponseWriter {
     private void writeCrlf() throws IOException {
         out.write('\r');
         out.write('\n');
+    }
+
+    private enum ResponseState {
+        UNDECIDED,
+        CHUNKED,
     }
 }
