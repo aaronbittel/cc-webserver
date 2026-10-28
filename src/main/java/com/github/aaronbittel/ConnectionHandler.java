@@ -73,16 +73,17 @@ public class ConnectionHandler implements Runnable {
                 closeConnection = true;
             }
 
-            var writer = HttpResponseWriter.forRequest(out, request);
-            handler.handleRequest(writer, request);
-
+            var connectionPolicy = ConnectionPolicy.NONE;
             if (clientRequestsConnectionClose(request.headers())) {
+                connectionPolicy = ConnectionPolicy.CLOSE;
                 closeConnection = true;
-                writer.headers().set("Connection", "close");
             } else if (clientRequestsConnectionKeepAlive(request.headers())) {
                 closeConnection = false;
-                writer.headers().set("Connection", "keep-alive");
+                connectionPolicy = ConnectionPolicy.KEEP_ALIVE;
             }
+
+            var writer = HttpResponseWriter.forRequest(out, request, connectionPolicy);
+            handler.handleRequest(writer, request);
 
             writer.finish();
 

@@ -25,7 +25,7 @@ class HttpResponseWriterTest {
 
     private static final int BUFFER_SIZE = 8192;
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
-    private final HttpResponseWriter writer = new HttpResponseWriter(out, true, HttpVersion.HTTP_1_1, BUFFER_SIZE);
+    private final HttpResponseWriter writer = new HttpResponseWriter(out, true, HttpVersion.HTTP_1_1, ConnectionPolicy.NONE, BUFFER_SIZE);
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("emptyBodyWriters")
@@ -145,12 +145,42 @@ class HttpResponseWriterTest {
                 .hasEmptyBody();
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("write_methods")
+    void freezes_headers_and_status_after_first_write(String description, BodyWriter writeBody) throws IOException {
+        writer.setStatus(HttpStatus.TEMPORARY_REDIRECT);
+        var headers = writer.headers();
+        headers.set("Key", "Value");
+
+        writeBody.write(writer);
+
+        headers.set("AfterWrite", "Value");
+        writer.setStatus(HttpStatus.NOT_FOUND);
+        writer.finish();
+
+        HttpResponseAssert.from(out)
+                .hasStatusLine("HTTP/1.1 307 Temporary Redirect")
+                .hasHeader("Content-Length: 2")
+                .hasHeader("Key: Value")
+                .hasNoHeader("AfterWrite")
+                .hasBody("hi");
+    }
+
+    static Stream<Arguments> write_methods() {
+        return Stream.of(
+                Arguments.of("write(String)", (BodyWriter) writer -> writer.write("hi")),
+                Arguments.of("write(byte[])", (BodyWriter) writer -> writer.write("hi".getBytes(StandardCharsets.UTF_8))),
+                Arguments.of("write(InputStream)", (BodyWriter) writer -> writer.write(
+                        new ByteArrayInputStream("hi".getBytes(StandardCharsets.UTF_8))))
+        );
+    }
+
     @Nested
     class ResponseWriterChunked {
 
         private static final int BUFFER_SIZE = 20;
         private final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        private final HttpResponseWriter writer = new HttpResponseWriter(out, true, HttpVersion.HTTP_1_1, BUFFER_SIZE);
+        private final HttpResponseWriter writer = new HttpResponseWriter(out, true, HttpVersion.HTTP_1_1, ConnectionPolicy.NONE, BUFFER_SIZE);
 
         @ParameterizedTest(name = "{0}")
         @MethodSource("fitsInBuffer")
