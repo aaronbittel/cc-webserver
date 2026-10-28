@@ -1,6 +1,6 @@
 package com.github.aaronbittel;
 
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -18,17 +18,13 @@ import static org.assertj.core.api.Assertions.assertThatIOException;
 
 class HttpResponseWriterTest {
 
+    private static final int BUFFER_SIZE = 8192;
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
-    private final HttpResponseWriter writer = HttpResponseWriter.forRequest(HttpMethod.GET);
-
-    @BeforeEach
-    void setUp() {
-        out.reset();
-    }
+    private final HttpResponseWriter writer = new HttpResponseWriter(out, true, HttpVersion.HTTP_1_1, BUFFER_SIZE);
 
     @Test
     void empty_body_write() throws IOException {
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
         HttpResponseAssert.from(out).hasEmptyBody();
     }
 
@@ -36,19 +32,19 @@ class HttpResponseWriterTest {
     void write_with_body() throws IOException {
         var content = "Hello World";
         writer.write(content);
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         HttpResponseAssert.from(out).hasBody(content);
     }
 
     @Test
     void does_not_write_body_when_configured_without_body() throws IOException {
-        var writer = HttpResponseWriter.forMalformedRequest();
+        var writer = HttpResponseWriter.forMalformedRequest(out);
 
         var content = "Hello, World";
         writer.headers().set("Content-Type", "text/plain");
         writer.write(content);
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         HttpResponseAssert.from(out).hasEmptyBody();
     }
@@ -56,14 +52,14 @@ class HttpResponseWriterTest {
     @Test
     void sets_content_length_when_not_provided() throws IOException {
         writer.write("Hello, World!");
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
         HttpResponseAssert.from(out).hasHeader("Content-Length: 13");
     }
 
     @Test
     void calculates_content_length_in_bytes() throws IOException {
         writer.write("Héllo");
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
         HttpResponseAssert.from(out).hasHeader("Content-Length: 6");
     }
 
@@ -71,19 +67,19 @@ class HttpResponseWriterTest {
     void allows_status_to_be_overwritten() throws IOException {
         writer.setStatus(HttpStatus.NOT_FOUND);
         writer.setStatus(HttpStatus.METHOD_NOT_ALLOWED);
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         HttpResponseAssert.from(out).hasStatusLine("HTTP/1.1 405 Method Not Allowed");
     }
 
     @Test
     void finish_does_not_write_response_twice() throws IOException {
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         var response = out.toString(StandardCharsets.UTF_8);
         assertThat(response).isNotEmpty();
 
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
         assertThat(out.toString(StandardCharsets.UTF_8)).isEqualTo(response);
     }
 
@@ -94,7 +90,7 @@ class HttpResponseWriterTest {
         writer.write(", ");
         writer.write("World!");
 
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         HttpResponseAssert.from(out)
                 .hasStatusLine("HTTP/1.1 200 OK")
@@ -109,7 +105,7 @@ class HttpResponseWriterTest {
         writer.write("Hello");
 
         assertThatIOException()
-                .isThrownBy(() -> writer.finish(out, HttpVersion.HTTP_1_1))
+                .isThrownBy(writer::finish)
                 .withMessage("Content-Length mismatch: declared 10 bytes, but body contains 5 bytes");
 
         assertThat(out.size()).isZero();
@@ -121,7 +117,7 @@ class HttpResponseWriterTest {
         writer.write("Hello");
 
         assertThatIOException()
-                .isThrownBy(() -> writer.finish(out, HttpVersion.HTTP_1_1))
+                .isThrownBy(writer::finish)
                 .withMessage("Content-Length mismatch: declared 3 bytes, but body contains 5 bytes");
 
         assertThat(out.size()).isZero();
@@ -131,7 +127,7 @@ class HttpResponseWriterTest {
     void accepts_zero_content_length_for_empty_body() throws IOException {
         writer.headers().set("Content-Length", "0");
 
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         HttpResponseAssert.from(out)
                 .hasHeader("Content-Length: 0")
@@ -143,7 +139,7 @@ class HttpResponseWriterTest {
         var content = "Hello, World!";
         writer.write(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)));
 
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         HttpResponseAssert.from(out)
                 .hasHeader("Content-Length: 13")
@@ -154,11 +150,43 @@ class HttpResponseWriterTest {
     void writes_empty_input_stream() throws IOException {
         writer.write(new ByteArrayInputStream(new byte[0]));
 
-        writer.finish(out, HttpVersion.HTTP_1_1);
+        writer.finish();
 
         HttpResponseAssert.from(out)
                 .hasHeader("Content-Length: 0")
                 .hasEmptyBody();
+    }
+
+    @Nested
+    class ResponseWriterChunked {
+
+        private static final int BUFFER_SIZE = 20;
+        private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+        private final HttpResponseWriter writer = new HttpResponseWriter(out, true, HttpVersion.HTTP_1_1, BUFFER_SIZE);
+
+        @Test
+        void uses_content_length_when_response_fits_in_buffer() throws IOException {
+            var content = "x".repeat(BUFFER_SIZE - 1);
+            writer.write(content);
+            writer.finish();
+
+            HttpResponseAssert.from(out)
+                    .hasStatusLine("HTTP/1.1 200 OK")
+                    .hasHeader("Content-Length: " + (BUFFER_SIZE - 1))
+                    .hasBody(content);
+        }
+
+        @Test
+        void uses_content_length_when_response_fits_in_buffer_exactly() throws IOException {
+            var content = "x".repeat(BUFFER_SIZE);
+            writer.write(content);
+            writer.finish();
+
+            HttpResponseAssert.from(out)
+                    .hasStatusLine("HTTP/1.1 200 OK")
+                    .hasHeader("Content-Length: " + BUFFER_SIZE)
+                    .hasBody(content);
+        }
     }
 
     static class HttpResponseAssert {

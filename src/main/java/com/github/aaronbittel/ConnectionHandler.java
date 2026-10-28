@@ -55,17 +55,17 @@ public class ConnectionHandler implements Runnable {
             } catch (IllegalArgumentException e) {
                 log.fine(() -> "Invalid HTTP request: " + e.getMessage());
 
-                var writer = HttpResponseWriter.forMalformedRequest();
+                var writer = HttpResponseWriter.forMalformedRequest(out);
                 HttpResponses.badRequestAndCloseConnection(writer);
-                writer.finish(out, HttpVersion.HTTP_1_1);
+                writer.finish();
                 return;
             } catch (SocketTimeoutException e) {
                 log.fine(() -> "Socket timeout: " + e.getMessage());
 
-                var writer = HttpResponseWriter.forMalformedRequest();
+                var writer = HttpResponseWriter.forMalformedRequest(out);
                 writer.headers().set("Connection", "close");
                 writer.setStatus(HttpStatus.REQUEST_TIMEOUT);
-                writer.finish(out, HttpVersion.HTTP_1_1);
+                writer.finish();
                 return;
             }
 
@@ -73,7 +73,7 @@ public class ConnectionHandler implements Runnable {
                 closeConnection = true;
             }
 
-            var writer = HttpResponseWriter.forRequest(request.method());
+            var writer = HttpResponseWriter.forRequest(out, request);
             handler.handleRequest(writer, request);
 
             if (clientRequestsConnectionClose(request.headers())) {
@@ -84,7 +84,7 @@ public class ConnectionHandler implements Runnable {
                 writer.headers().set("Connection", "keep-alive");
             }
 
-            writer.finish(out, request.version());
+            writer.finish();
 
             if (closeConnection || !awaitNextRequest(socket, in)) {
                 break;

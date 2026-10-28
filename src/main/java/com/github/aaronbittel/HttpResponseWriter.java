@@ -15,39 +15,43 @@ public class HttpResponseWriter implements ResponseWriter {
     private final HttpHeaders headers = new HttpHeaders();
     private static final int BUFFER_SIZE = 8192;
     private final ByteBuffer buffer;
+    private final OutputStream out;
 
     private final boolean writeBody;
+    private final HttpVersion version;
     private boolean calledFinish = false;
 
-    HttpResponseWriter(boolean writeBody, int bufferSize) {
+    HttpResponseWriter(OutputStream out, boolean writeBody, HttpVersion version, int bufferSize) {
         if (bufferSize <= 0) {
             throw new IllegalArgumentException("bufferSize must be positive");
         }
 
+        this.out = out;
         this.writeBody = writeBody;
+        this.version = version;
         this.buffer = ByteBuffer.allocate(bufferSize);
     }
 
-    private HttpResponseWriter(boolean writeBody) {
-        this(writeBody, BUFFER_SIZE);
+    private HttpResponseWriter(OutputStream out, boolean writeBody, HttpVersion version) {
+        this(out, writeBody, version, BUFFER_SIZE);
     }
 
-    public static HttpResponseWriter forRequest(HttpMethod method) {
-        return new HttpResponseWriter(method != HttpMethod.HEAD);
+    public static HttpResponseWriter forRequest(OutputStream out, HttpRequest request) {
+        return new HttpResponseWriter(out, request.method() != HttpMethod.HEAD, request.version());
     }
 
-    public static HttpResponseWriter forMalformedRequest() {
-        return new HttpResponseWriter(false);
+    public static HttpResponseWriter forMalformedRequest(OutputStream out) {
+        return new HttpResponseWriter(out, false, HttpVersion.HTTP_1_1);
     }
 
-    private void serialize(OutputStream out, HttpVersion version) throws IOException {
-        writeStatusLine(out, version, status);
+    private void serialize() throws IOException {
+        writeStatusLine();
 
         for (var header : headers()) {
-            writeHeaderLine(out, header.getKey(), header.getValue());
+            writeHeaderLine(header.getKey(), header.getValue());
         }
 
-        writeCrlf(out);
+        writeCrlf();
 
         if (writeBody) {
             out.write(buffer.array(), 0, buffer.position());
@@ -56,7 +60,7 @@ public class HttpResponseWriter implements ResponseWriter {
         out.flush();
     }
 
-    public void finish(OutputStream out, HttpVersion version) throws IOException {
+    public void finish() throws IOException {
         if (calledFinish) {
             return;
         }
@@ -83,7 +87,7 @@ public class HttpResponseWriter implements ResponseWriter {
             );
         }
 
-        serialize(out, version);
+        serialize();
     }
 
     @Override
@@ -98,12 +102,15 @@ public class HttpResponseWriter implements ResponseWriter {
 
     @Override
     public void write(String text) throws IOException {
-        buffer.put(text.getBytes(StandardCharsets.UTF_8));
+        write(text.getBytes(StandardCharsets.UTF_8));
     }
 
     @Override
     public void write(byte[] data) throws IOException {
-        buffer.put(data);
+        if (data.length <= buffer.remaining()) {
+            buffer.put(data);
+            return;
+        }
     }
 
     @Override
@@ -117,28 +124,28 @@ public class HttpResponseWriter implements ResponseWriter {
         }
     }
 
-    private void writeStatusLine(OutputStream out, HttpVersion version, HttpStatus status) throws IOException {
-        writeAscii(out, version.protocolString());
+    private void writeStatusLine() throws IOException {
+        writeAscii(version.protocolString());
         out.write(' ');
-        writeAscii(out, String.valueOf(status.code()));
+        writeAscii(String.valueOf(status.code()));
         out.write(' ');
-        writeAscii(out, status.text());
-        writeCrlf(out);
+        writeAscii(status.text());
+        writeCrlf();
     }
 
-    private void writeHeaderLine(OutputStream out, String key, String value) throws IOException {
-        writeAscii(out, key);
+    private void writeHeaderLine(String key, String value) throws IOException {
+        writeAscii(key);
         out.write(':');
         out.write(' ');
-        writeAscii(out, value);
-        writeCrlf(out);
+        writeAscii(value);
+        writeCrlf();
     }
 
-    private void writeAscii(OutputStream out, String value) throws IOException {
+    private void writeAscii(String value) throws IOException {
         out.write(value.getBytes(StandardCharsets.US_ASCII));
     }
 
-    private void writeCrlf(OutputStream out) throws IOException {
+    private void writeCrlf() throws IOException {
         out.write('\r');
         out.write('\n');
     }
