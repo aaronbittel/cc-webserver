@@ -1,5 +1,6 @@
 package com.github.aaronbittel.template;
 
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -87,5 +88,62 @@ class TemplateTest {
     void throws_when_path_does_not_exist() {
         Path file = tempDir.resolve("missing.html");
         assertThatIOException().isThrownBy(() -> Template.parse(file));
+    }
+
+    @Nested
+    class HtmlEscaping {
+
+        @ParameterizedTest
+        @MethodSource("html_special_characters")
+        void escapes_html_special_characters(String input, String expected) {
+            assertThat(Template.parse("{{.value}}")
+                    .render(Map.of("value", input)))
+                    .isEqualTo(expected);
+        }
+
+        static Stream<Arguments> html_special_characters() {
+            return Stream.of(
+                    Arguments.of("&", "&amp;"),
+                    Arguments.of("<", "&lt;"),
+                    Arguments.of(">", "&gt;"),
+                    Arguments.of("\"", "&quot;"),
+                    Arguments.of("'", "&#39;")
+            );
+        }
+
+        @Test
+        void escapes_all_html_special_characters() {
+            assertThat(Template.parse("{{.value}}")
+                    .render(Map.of("value", "&<>\"'")))
+                    .isEqualTo("&amp;&lt;&gt;&quot;&#39;");
+        }
+
+        @Test
+        void escapes_expression_values_but_preserves_literal_html() {
+            assertThat(Template.parse("<p>{{.name}}</p>")
+                    .render(Map.of("name", "<script>alert('xss')</script>")))
+                    .isEqualTo("<p>&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;</p>");
+        }
+
+        @Test
+        void escapes_ampersands_in_existing_html_entities() {
+            assertThat(Template.parse("{{.value}}")
+                    .render(Map.of("value", "&amp;")))
+                    .isEqualTo("&amp;amp;");
+        }
+
+        @Test
+        void escapes_each_expression_independently() {
+            assertThat(Template.parse("{{.first}} & {{.second}}")
+                    .render(Map.of("first", "<Bob>", "second", "Tom & Jerry")))
+                    .isEqualTo("&lt;Bob&gt; & Tom &amp; Jerry");
+        }
+
+        @Test
+        void preserves_unicode_when_escaping() {
+            assertThat(Template.parse("{{.value}}")
+                    .render(Map.of("value", "café 😀")))
+                    .isEqualTo("café 😀");
+        }
     }
 }

@@ -65,7 +65,7 @@ public class Template {
 
         for (var segment : segments) {
             var sbAppend = switch (segment) {
-                case Segment.ExpressionSegment(var expression) -> resolveProperty(data, expression);
+                case Segment.ExpressionSegment(var expression) -> escapeHtml(resolveProperty(data, expression));
                 case Segment.TextSegment(var text) -> text;
             };
             sb.append(sbAppend);
@@ -84,5 +84,14 @@ public class Template {
             case Boolean b -> String.valueOf(b);
             default -> throw new IllegalArgumentException("Illegal type: " + value.getClass().getName());
         };
+    }
+
+    private static String escapeHtml(String value) {
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 }
