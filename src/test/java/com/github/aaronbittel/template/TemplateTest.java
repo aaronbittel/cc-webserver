@@ -120,6 +120,24 @@ class TemplateTest {
     }
 
     @Nested
+    class RecordAccess {
+
+        record Person(String name, int age) {}
+
+        @Test
+        void accesses_record_components() {
+            var template = Template.parse("Hello, {{.name}}. Your age: {{.age}}");
+            assertThat(template.render(new Person("Alice", 42))).isEqualTo("Hello, Alice. Your age: 42");
+        }
+
+        @Test
+        void renders_missing_component_as_empty_string() {
+            var template = Template.parse("Do {{.something}}");
+            assertThat(template.render(new Person("Alice", 42))).isEqualTo("Do ");
+        }
+    }
+
+    @Nested
     class HtmlEscaping {
 
         @ParameterizedTest

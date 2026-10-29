@@ -1,6 +1,7 @@
 package com.github.aaronbittel.template;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -56,16 +57,13 @@ public class Template {
         return new Template(segments);
     }
 
-    public String render(Map<String, Object> data) {
-        if (data == null) {
-            data = Map.of();
-        }
-
+    public String render(Object data) {
         var sb = new StringBuilder();
 
         for (var segment : segments) {
             var sbAppend = switch (segment) {
-                case Segment.ExpressionSegment(var expression) -> escapeHtml(resolveProperty(data, expression));
+                case Segment.ExpressionSegment(var expression) ->
+                        escapeHtml(valueToString(resolveProperty(data, expression)));
                 case Segment.TextSegment(var text) -> text;
             };
             sb.append(sbAppend);
@@ -74,8 +72,39 @@ public class Template {
         return sb.toString();
     }
 
-    private static String resolveProperty(Map<String, Object> data, String expression) {
-        var value = data.get(expression);
+    private static Object resolveProperty(Object data, String expression) {
+        if (data == null) {
+            return null;
+        }
+
+        if (data instanceof Map<?, ?> map) {
+            return map.get(expression);
+        }
+
+        var type = data.getClass();
+
+        if (type.isRecord()) {
+            return resolveRecordComponent(type, data, expression);
+        }
+
+        throw new UnsupportedOperationException("resolveProperty is not supported for " + type.getName());
+    }
+
+    private static Object resolveRecordComponent(Class<?> type, Object data, String expression) {
+        for (var component : type.getRecordComponents()) {
+            if (component.getName().equals(expression)) {
+                var method = component.getAccessor();
+                try {
+                    return method.invoke(data);
+                } catch (IllegalAccessException | InvocationTargetException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String valueToString(Object value) {
         return switch (value) {
             case null -> "";
             case String s -> s;
