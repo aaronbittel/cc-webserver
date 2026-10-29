@@ -11,6 +11,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -67,13 +69,40 @@ class TemplateTest {
                 Arguments.of("<h1>{{.name}}</h1>", Map.of("name", "Bob"), "<h1>Bob</h1>"),
                 Arguments.of("{{.name}} is here", Map.of("name", "Bob"), "Bob is here"),
                 Arguments.of("Hello, {{.name}}", Map.of("name", "Bob"), "Hello, Bob"),
-                Arguments.of("{{.age}}", Map.of("age", 30), "30"),
-                Arguments.of("{{.active}}", Map.of("active", true), "true"),
-                Arguments.of("{{.initial}}", Map.of("initial", 'A'), "A"),
-                Arguments.of("{{.price}}", Map.of("price", 3.14f), "3.14"),
                 Arguments.of("Empty '{{.name}}' Name", null, "Empty '' Name"),
                 Arguments.of("Empty '{{.name}}' Name", Map.of("age", 42), "Empty '' Name")
         );
+    }
+
+    @ParameterizedTest
+    @MethodSource("primitives")
+    void renders_primitives(Object data, String expected) {
+        var map = new HashMap<String, Object>();
+        map.put("value", data);
+        assertThat(Template.parse("{{.value}}").render(map)).isEqualTo(expected);
+    }
+
+    static Stream<Arguments> primitives() {
+        return Stream.of(
+                Arguments.of(null, ""),
+                Arguments.of((byte) 32, "32"),
+                Arguments.of((short) 32, "32"),
+                Arguments.of(32, "32"),
+                Arguments.of((long) 32, "32"),
+                Arguments.of((float) 32.2, "32.2"),
+                Arguments.of(32.2, "32.2"),
+                Arguments.of('A', "A"),
+                Arguments.of(true, "true"),
+                Arguments.of(false, "false"),
+                Arguments.of("hello", "hello")
+        );
+    }
+
+    @Test
+    void throws_if_data_is_a_list() {
+        var template = Template.parse("{{.value}}");
+        assertThatIllegalArgumentException().isThrownBy(() -> template.render(Map.of("value", List.of())))
+                .withMessageContaining("Illegal type:");
     }
 
     @Test
