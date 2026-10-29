@@ -103,12 +103,40 @@ class TemplateTest {
                     Arguments.of("hello", "hello")
             );
         }
+
+        @Test
+        void accesses_nested_map_values() {
+            var template = Template.parse("{{.names.value.count}}");
+            var data = Map.of("names", Map.of("value", Map.of("count", 40)));
+            assertThat(template.render(data)).isEqualTo("40");
+        }
+
+        @ParameterizedTest
+        @MethodSource("nestedAccessWithAbsentOrNullValues")
+        void renders_empty_string_when_nested_value_is_missing(Map<String, Object> data) {
+            var template = Template.parse("{{.names.value.count}}");
+            assertThat(template.render(data)).isEqualTo("");
+        }
+
+        static Stream<Arguments> nestedAccessWithAbsentOrNullValues() {
+            var dataWithNullNames = new HashMap<String, Object>();
+            dataWithNullNames.put("names", null);
+            return Stream.of(
+                    Arguments.of(Map.of()),
+                    Arguments.of(Map.of("names", Map.of())),
+                    Arguments.of(Map.of("names", Map.of("value", Map.of()))),
+                    Arguments.of(Map.of("names", Map.of("value", Map.of("different", 40)))),
+                    Arguments.of(dataWithNullNames)
+            );
+        }
     }
 
     @Nested
     class RecordAccess {
 
         record Person(String name, int age) {}
+
+        record PersonWithBestFriend(String name, Person bestFriend) {}
 
         @Test
         void accesses_record_components() {
@@ -121,20 +149,34 @@ class TemplateTest {
             var template = Template.parse("Do {{.something}}");
             assertThat(template.render(new Person("Alice", 42))).isEqualTo("Do ");
         }
+
+        @Test
+        void accesses_nested_record_components() {
+            var template = Template.parse("{{.bestFriend.name}}");
+            var data = new PersonWithBestFriend("Alice", new Person("Bob", 30));
+            assertThat(template.render(data)).isEqualTo("Bob");
+        }
+
+        @Test
+        void renders_empty_string_when_nested_record_is_null() {
+            var template = Template.parse("{{.bestFriend.name}}");
+            var data = new PersonWithBestFriend("Alice", null);
+            assertThat(template.render(data)).isEmpty();
+        }
     }
 
     @Nested
     class HtmlEscaping {
 
         @ParameterizedTest
-        @MethodSource("html_special_characters")
+        @MethodSource("htmlSpecialCharacters")
         void escapes_html_special_characters(String input, String expected) {
             assertThat(Template.parse("{{.value}}")
                     .render(Map.of("value", input)))
                     .isEqualTo(expected);
         }
 
-        static Stream<Arguments> html_special_characters() {
+        static Stream<Arguments> htmlSpecialCharacters() {
             return Stream.of(
                     Arguments.of("&", "&amp;"),
                     Arguments.of("<", "&lt;"),

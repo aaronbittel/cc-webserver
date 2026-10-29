@@ -5,6 +5,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +51,7 @@ public class Template {
             if (expression.isEmpty()) {
                 throw new IllegalArgumentException("Expression must not be empty");
             }
-            segments.add(new Segment.ExpressionSegment(expression));
+            segments.add(new Segment.ExpressionSegment(Arrays.stream(expression.split("\\.")).toList()));
             source = source.substring(end + 2);
         }
 
@@ -62,8 +63,7 @@ public class Template {
 
         for (var segment : segments) {
             var sbAppend = switch (segment) {
-                case Segment.ExpressionSegment(var expression) ->
-                        escapeHtml(valueToString(resolveProperty(data, expression)));
+                case Segment.ExpressionSegment(var path) -> escapeHtml(valueToString(resolvePath(data, path)));
                 case Segment.TextSegment(var text) -> text;
             };
             sb.append(sbAppend);
@@ -72,19 +72,30 @@ public class Template {
         return sb.toString();
     }
 
-    private static Object resolveProperty(Object data, String expression) {
+    private static Object resolvePath(Object data, List<String> path) {
+        var current = data;
+        for (var property : path) {
+            current = resolveProperty(current, property);
+            if (current == null) {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    private static Object resolveProperty(Object data, String property) {
         if (data == null) {
             return null;
         }
 
         if (data instanceof Map<?, ?> map) {
-            return map.get(expression);
+            return map.get(property);
         }
 
         var type = data.getClass();
 
         if (type.isRecord()) {
-            return resolveRecordComponent(type, data, expression);
+            return resolveRecordComponent(type, data, property);
         }
 
         throw new UnsupportedOperationException("resolveProperty is not supported for " + type.getName());
