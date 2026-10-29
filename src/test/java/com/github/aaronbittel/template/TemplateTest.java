@@ -22,9 +22,6 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 class TemplateTest {
 
-    @TempDir
-    Path tempDir;
-
     @ParameterizedTest
     @ValueSource(strings = {
             "Hello, World!",
@@ -33,16 +30,6 @@ class TemplateTest {
     })
     void renders_plain_text_unchanged(String source) {
         assertThat(Template.parse(source).render(null)).isEqualTo(source);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "{{.name}}",
-            "{{ .name }}",
-            "{{  .name      }}",
-    })
-    void renders_property_expression(String source) {
-        assertThat(Template.parse(source).render(Map.of("name", "Bob"))).isEqualTo("Bob");
     }
 
     @ParameterizedTest
@@ -57,47 +44,6 @@ class TemplateTest {
         assertThatIllegalArgumentException().isThrownBy(() -> Template.parse(source));
     }
 
-    @ParameterizedTest
-    @MethodSource("templates")
-    void renders_template(String source, Map<String, Object> input, String expected) {
-        assertThat(Template.parse(source).render(input)).isEqualTo(expected);
-    }
-
-    static Stream<Arguments> templates() {
-        return Stream.of(
-                Arguments.of("Hello, {{.name}}!", Map.of("name", "Bob"), "Hello, Bob!"),
-                Arguments.of("<h1>{{.name}}</h1>", Map.of("name", "Bob"), "<h1>Bob</h1>"),
-                Arguments.of("{{.name}} is here", Map.of("name", "Bob"), "Bob is here"),
-                Arguments.of("Hello, {{.name}}", Map.of("name", "Bob"), "Hello, Bob"),
-                Arguments.of("Empty '{{.name}}' Name", null, "Empty '' Name"),
-                Arguments.of("Empty '{{.name}}' Name", Map.of("age", 42), "Empty '' Name")
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("primitives")
-    void renders_primitives(Object data, String expected) {
-        var map = new HashMap<String, Object>();
-        map.put("value", data);
-        assertThat(Template.parse("{{.value}}").render(map)).isEqualTo(expected);
-    }
-
-    static Stream<Arguments> primitives() {
-        return Stream.of(
-                Arguments.of(null, ""),
-                Arguments.of((byte) 32, "32"),
-                Arguments.of((short) 32, "32"),
-                Arguments.of(32, "32"),
-                Arguments.of((long) 32, "32"),
-                Arguments.of((float) 32.2, "32.2"),
-                Arguments.of(32.2, "32.2"),
-                Arguments.of('A', "A"),
-                Arguments.of(true, "true"),
-                Arguments.of(false, "false"),
-                Arguments.of("hello", "hello")
-        );
-    }
-
     @Test
     void throws_if_data_is_a_list() {
         var template = Template.parse("{{.value}}");
@@ -105,18 +51,58 @@ class TemplateTest {
                 .withMessageContaining("Illegal type:");
     }
 
-    @Test
-    void parses_template_from_path() throws IOException {
-        Path file = tempDir.resolve("template.html");
-        Files.writeString(file, "Hello, {{.name}}!");
+    @Nested
+    class MapAccess {
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "{{.name}}",
+                "{{ .name }}",
+                "{{  .name      }}",
+        })
+        void renders_property_expression(String source) {
+            assertThat(Template.parse(source).render(Map.of("name", "Bob"))).isEqualTo("Bob");
+        }
 
-        assertThat(Template.parse(file).render(Map.of("name", "Bob"))).isEqualTo("Hello, Bob!");
-    }
+        @ParameterizedTest
+        @MethodSource("templates")
+        void renders_template(String source, Map<String, Object> input, String expected) {
+            assertThat(Template.parse(source).render(input)).isEqualTo(expected);
+        }
 
-    @Test
-    void throws_when_path_does_not_exist() {
-        Path file = tempDir.resolve("missing.html");
-        assertThatIOException().isThrownBy(() -> Template.parse(file));
+        static Stream<Arguments> templates() {
+            return Stream.of(
+                    Arguments.of("Hello, {{.name}}!", Map.of("name", "Bob"), "Hello, Bob!"),
+                    Arguments.of("<h1>{{.name}}</h1>", Map.of("name", "Bob"), "<h1>Bob</h1>"),
+                    Arguments.of("{{.name}} is here", Map.of("name", "Bob"), "Bob is here"),
+                    Arguments.of("Hello, {{.name}}", Map.of("name", "Bob"), "Hello, Bob"),
+                    Arguments.of("Empty '{{.name}}' Name", null, "Empty '' Name"),
+                    Arguments.of("Empty '{{.name}}' Name", Map.of("age", 42), "Empty '' Name")
+            );
+        }
+
+        @ParameterizedTest
+        @MethodSource("primitives")
+        void renders_primitives(Object data, String expected) {
+            var map = new HashMap<String, Object>();
+            map.put("value", data);
+            assertThat(Template.parse("{{.value}}").render(map)).isEqualTo(expected);
+        }
+
+        static Stream<Arguments> primitives() {
+            return Stream.of(
+                    Arguments.of(null, ""),
+                    Arguments.of((byte) 32, "32"),
+                    Arguments.of((short) 32, "32"),
+                    Arguments.of(32, "32"),
+                    Arguments.of((long) 32, "32"),
+                    Arguments.of((float) 32.2, "32.2"),
+                    Arguments.of(32.2, "32.2"),
+                    Arguments.of('A', "A"),
+                    Arguments.of(true, "true"),
+                    Arguments.of(false, "false"),
+                    Arguments.of("hello", "hello")
+            );
+        }
     }
 
     @Nested
@@ -191,6 +177,27 @@ class TemplateTest {
             assertThat(Template.parse("{{.value}}")
                     .render(Map.of("value", "café 😀")))
                     .isEqualTo("café 😀");
+        }
+    }
+
+    @Nested
+    class FileTemplates {
+
+        @TempDir
+        Path tempDir;
+
+        @Test
+        void parses_template_from_path() throws IOException {
+            Path file = tempDir.resolve("template.html");
+            Files.writeString(file, "Hello, {{.name}}!");
+
+            assertThat(Template.parse(file).render(Map.of("name", "Bob"))).isEqualTo("Hello, Bob!");
+        }
+
+        @Test
+        void throws_when_path_does_not_exist() {
+            Path file = tempDir.resolve("missing.html");
+            assertThatIOException().isThrownBy(() -> Template.parse(file));
         }
     }
 }
