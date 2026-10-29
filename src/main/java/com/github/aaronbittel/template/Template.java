@@ -2,6 +2,7 @@ package com.github.aaronbittel.template;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -92,27 +93,38 @@ public class Template {
             return map.get(property);
         }
 
-        var type = data.getClass();
+        Method method = getMethod(data, property);
 
-        if (type.isRecord()) {
-            return resolveRecordComponent(type, data, property);
+        try {
+            return method.invoke(data);
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("Cannot access property '%s' on type %s"
+                    .formatted(property, data.getClass().getName()), e);
+        } catch (InvocationTargetException e) {
+            var cause = e.getCause();
+
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+
+            throw new IllegalStateException("Property method failed", cause);
         }
-
-        throw new UnsupportedOperationException("resolveProperty is not supported for " + type.getName());
     }
 
-    private static Object resolveRecordComponent(Class<?> type, Object data, String expression) {
-        for (var component : type.getRecordComponents()) {
-            if (component.getName().equals(expression)) {
-                var method = component.getAccessor();
-                try {
-                    return method.invoke(data);
-                } catch (IllegalAccessException | InvocationTargetException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+    private static Method getMethod(Object data, String name) {
+        Method method;
+        try {
+            method = data.getClass().getMethod(name);
+        } catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException("No method '%s()' on type %s"
+                    .formatted(name, data.getClass().getName()), e);
         }
-        return null;
+
+        if (method.getReturnType() == void.class) {
+            throw new IllegalArgumentException("method '%s' must not return void".formatted(method.getName()));
+        }
+
+        return method;
     }
 
     private static String valueToString(Object value) {

@@ -129,25 +129,58 @@ class TemplateTest {
                     Arguments.of(dataWithNullNames)
             );
         }
+
+        @Test
+        void accesses_methods_on_nested_objects() {
+            var template = Template.parse("Hello, {{.person.name}}. Your age: {{.person.age}}");
+            var data = Map.of("person", new Person());
+            assertThat(template.render(data)).isEqualTo("Hello, Alice. Your age: 42");
+        }
     }
 
     @Nested
     class RecordAccess {
 
-        record Person(String name, int age) {}
+        @SuppressWarnings("unused")
+        record Person(String name, int age) {
+            public int methodWithParams(int param) {return param;}
+
+            public void methodVoid() {}
+
+            public int method() {return 0;}
+
+            private String privateMethod() {return "private";}
+
+            public Person bestFriend() {return new Person("Bob", 99);}
+        }
+
+        private static final Person person = new Person("Alice", 42);
 
         record PersonWithBestFriend(String name, Person bestFriend) {}
 
         @Test
         void accesses_record_components() {
             var template = Template.parse("Hello, {{.name}}. Your age: {{.age}}");
-            assertThat(template.render(new Person("Alice", 42))).isEqualTo("Hello, Alice. Your age: 42");
+            assertThat(template.render(person)).isEqualTo("Hello, Alice. Your age: 42");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "methodNotExist",
+                "privateMethod",
+                "methodWithParams",
+        })
+        void throws_when_method_is_missing_or_inaccessible(String name) {
+            var template = Template.parse("{{." + name + "}}");
+            assertThatIllegalArgumentException().isThrownBy(() -> template.render(person))
+                    .withMessageContaining("No method '%s()' on type".formatted(name));
         }
 
         @Test
-        void renders_missing_component_as_empty_string() {
-            var template = Template.parse("Do {{.something}}");
-            assertThat(template.render(new Person("Alice", 42))).isEqualTo("Do ");
+        void throws_when_method_returns_void() {
+            var template = Template.parse("{{.methodVoid}}");
+            assertThatIllegalArgumentException().isThrownBy(() -> template.render(person))
+                    .withMessage("method 'methodVoid' must not return void");
         }
 
         @Test
@@ -158,10 +191,32 @@ class TemplateTest {
         }
 
         @Test
-        void renders_empty_string_when_nested_record_is_null() {
+        void renders_empty_string_when_nested_component_is_null() {
             var template = Template.parse("{{.bestFriend.name}}");
             var data = new PersonWithBestFriend("Alice", null);
             assertThat(template.render(data)).isEmpty();
+        }
+
+        @Test
+        void accesses_public_zero_arg_method() {
+            var template = Template.parse("{{.method}}");
+            assertThat(template.render(person)).isEqualTo("0");
+        }
+
+        @Test
+        void accesses_nested_methods() {
+            var template = Template.parse("My best friend is: {{.bestFriend.name}} ({{.bestFriend.bestFriend.age}})");
+            assertThat(template.render(person)).isEqualTo("My best friend is: Bob (99)");
+        }
+    }
+
+    @Nested
+    class ClassAccess {
+
+        @Test
+        void accesses_public_method_on_regular_class() {
+            var template = Template.parse("Hello, {{.name}}. Your age: {{.age}}");
+            assertThat(template.render(new Person())).isEqualTo("Hello, Alice. Your age: 42");
         }
     }
 
@@ -241,5 +296,12 @@ class TemplateTest {
             Path file = tempDir.resolve("missing.html");
             assertThatIOException().isThrownBy(() -> Template.parse(file));
         }
+    }
+
+    @SuppressWarnings("unused")
+    static class Person {
+        public String name() {return "Alice";}
+
+        public int age() {return 42;}
     }
 }
